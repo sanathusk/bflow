@@ -1,6 +1,8 @@
+> 🌐 **Idioma / Language:** **Español** · [English](../en/guide.md)
+
 # Cómo trabajar con bflow
 
-Esta guía es para quien ya instaló bflow y configuró un repo (ver el [README](../README.md) y la [instalación](instalacion.md)). Para los conceptos (fases, carriles, `next`, garantías) ve a [conceptos](conceptos.md); para `bflow.yaml` y los trackers, a [configuración](configuracion.md); para cada comando, a [comandos](comandos.md). Explica qué haces tú y qué hace bflow en cada paso, cómo ajustar a los agentes y qué hacer cuando algo se atora.
+Esta guía es para quien ya instaló bflow y configuró un repo (ver el [README](../../README.md) y la [instalación](instalacion.md)). Para los conceptos (fases, carriles, `next`, garantías) ve a [conceptos](conceptos.md); para `bflow.yaml` y los trackers, a [configuración](configuracion.md); para cada comando, a [comandos](comandos.md). Explica qué haces tú y qué hace bflow en cada paso, cómo ajustar a los agentes y qué hacer cuando algo se atora.
 
 ## Quién hace qué
 

@@ -1,3 +1,5 @@
+> 🌐 **Idioma / Language:** **Español** · [English](../en/how-to-test-and-report.md)
+
 # Cómo probar bflow y reportar issues
 
 Gracias por probar bflow. Va en la v0.1.0, la primera versión publicada: hay cosas que fallan, y lo más útil que puedes hacer es contarnos cuáles.

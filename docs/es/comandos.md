@@ -1,3 +1,5 @@
+> 🌐 **Idioma / Language:** **Español** · [English](../en/commands.md)
+
 # Comandos
 
 `bflow help` lista todos. Cualquier comando acepta `--json` y responde con el mismo envelope (ver [`next`](conceptos.md#el-contrato-con-el-agente-next)). Códigos de salida: `0` bien, `1` error, `2` rechazo del flujo. Los corchetes son opcionales; si omites `ID`, se usa la tarea activa.

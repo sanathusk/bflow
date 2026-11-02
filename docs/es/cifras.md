@@ -1,3 +1,5 @@
+> 🌐 **Idioma / Language:** **Español** · [English](../en/numbers.md)
+
 # Cifras reales de bflow en bflow
 
 Las tareas de este repositorio se hicieron con bflow. Esta página publica lo que midió, tarea por tarea, y cómo reproducirlo.

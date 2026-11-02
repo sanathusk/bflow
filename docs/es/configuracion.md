@@ -1,3 +1,5 @@
+> 🌐 **Idioma / Language:** **Español** · [English](../en/configuration.md)
+
 # Configuración
 
 ## `bflow.yaml` y sus capas
@@ -185,7 +187,7 @@ flow:
 API-12 · implementing · 1h42m · ronda 1 · 145.1k nuevos · 2.9M caché
 ```
 
-Los archivos fuente están en [`adapters/claude/`](../adapters/claude/).
+Los archivos fuente están en [`adapters/claude/`](../../adapters/claude/).
 
 ### OpenCode
 
@@ -208,7 +210,7 @@ models:
 
 Cada `start` guarda en el log el modelo de cada agente. `bflow stats` (línea `modelos:`, y `data.models`) y `bflow doctor` (ítem `veredicto-modelos`) comparan las 3 tareas más recientes con la configuración vigente contra las 3 anteriores: rechazos por gate, rondas y hotfixes. Si algo sube, lo dicen en rojo (solo con color) y nombran el modelo anterior al que volver; para volver, cambia `bflow.yaml` (agents) y corre `bflow render`. bflow nunca lo revierte por su cuenta.
 
-Un valor con `/` se usa tal cual. Un alias sin equivalente en ninguno de los dos deja al agente sin `model:` (usa el de tu OpenCode) y `render` y `bflow doctor` lo avisan; `doctor` también avisa si tu `opencode.json` no está al día (`bflow render`). Los archivos fuente están en [`adapters/opencode/`](../adapters/opencode/).
+Un valor con `/` se usa tal cual. Un alias sin equivalente en ninguno de los dos deja al agente sin `model:` (usa el de tu OpenCode) y `render` y `bflow doctor` lo avisan; `doctor` también avisa si tu `opencode.json` no está al día (`bflow render`). Los archivos fuente están en [`adapters/opencode/`](../../adapters/opencode/).
 
 ## Paneles y notificaciones
 

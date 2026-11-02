@@ -1,3 +1,5 @@
+> 🌐 **Idioma / Language:** **Español** · [English](../en/why-and-roadmap.md)
+
 # Por qué existe bflow y hacia dónde va
 
 Soy Alfonso, de [Innobytes](https://innobytes.tech). Hice bflow para mi equipo y para el lugar donde trabajo, y ahora quiero que otros lo prueben.

@@ -6,7 +6,7 @@ Gracias por el interés. bflow está en `v0.x` y el diseño todavía cambia; ant
 
 bflow es una v0.1 que el autor usa a diario y mantiene en su tiempo libre. Crece más rápido con la ayuda de quien lo usa, y cualquier aporte suma:
 
-- **Pruébalo y cuenta qué falla.** Un issue con la plantilla de bug ya es una contribución. Qué datos incluir: [cómo probar y reportar](docs/como-probar-y-reportar.md).
+- **Pruébalo y cuenta qué falla.** Un issue con la plantilla de bug ya es una contribución. Qué datos incluir: [cómo probar y reportar](docs/es/como-probar-y-reportar.md).
 - **Toma un issue abierto.** Los de [`good first issue`](https://github.com/innobytestech/bflow/labels/good%20first%20issue) son para empezar; los de [`help wanted`](https://github.com/innobytestech/bflow/labels/help%20wanted) (por ejemplo, los adaptadores de Linear y Codex) no están en el plan del autor y esperan a alguien que los necesite. Comenta en el issue antes de empezar para no duplicar trabajo.
 - **Propón ideas.** Abre un issue con la plantilla de propuesta y lo platicamos antes de escribir código.
 
@@ -39,6 +39,31 @@ Participar en este proyecto implica aceptar el [código de conducta](CODE_OF_CON
 - Mensajes estilo Conventional Commits: `feat(tracker): …`, `fix(guard): …`, `docs: …`.
 - Un PR por tema, con descripción de qué cambia y cómo se probó.
 - No incluyas datos internos de tu organización (URLs, IDs de proyectos, correos) en código, pruebas ni fixtures.
+
+## Documentación bilingüe
+
+El español es la fuente de verdad; el inglés la sigue en el mismo PR. Los archivos viven en carpetas por idioma:
+
+| Español | English |
+|---|---|
+| `docs/es/cifras.md` | `docs/en/numbers.md` |
+| `docs/es/comandos.md` | `docs/en/commands.md` |
+| `docs/es/como-probar-y-reportar.md` | `docs/en/how-to-test-and-report.md` |
+| `docs/es/conceptos.md` | `docs/en/concepts.md` |
+| `docs/es/configuracion.md` | `docs/en/configuration.md` |
+| `docs/es/guia.md` | `docs/en/guide.md` |
+| `docs/es/instalacion.md` | `docs/en/installation.md` |
+| `docs/es/por-que-y-rumbo.md` | `docs/en/why-and-roadmap.md` |
+| `README.md` | `README.en.md` |
+| `adapters/claude/README.md` | `adapters/claude/README.en.md` |
+
+Reglas:
+
+- Cada archivo abre con el banner de idioma que enlaza a su par (primera línea en `docs/`, tras el H1 en los README).
+- Los enlaces internos se quedan dentro del idioma: un archivo en `docs/es/` solo enlaza archivos de `docs/es/` (más su par en `../en/` en el banner); uno en `docs/en/`, solo `docs/en/` (más su par en `../es/`). Los archivos sin traducir (`CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`) se enlazan tal cual.
+- Los anchors cambian con la traducción (`#qué-garantiza-y-qué-no` ≠ `#what-it-guarantees-and-what-it-does-not`): verifica que cada `#anchor` exista en el archivo destino.
+- No renombres un slug sin actualizar la tabla de arriba, todos los enlaces y el script de verificación.
+- CI lo verifica con `go run ./scripts/docs-i18n`.
 
 ## Publicar una versión
 

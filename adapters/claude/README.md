@@ -1,3 +1,5 @@
+> 🌐 **Idioma / Language:** **Español** · [English](README.en.md)
+
 # Adaptador de Claude Code
 
 `bflow install claude` instala la skill y fusiona los hooks; no hay que copiar nada a mano. Los agentes los escribe `bflow render` en `<repo>/.claude/agents/bflow-<agente>.md` y se commitean.

@@ -1,3 +1,5 @@
+> 🌐 **Idioma / Language:** **Español** · [English](../en/installation.md)
+
 # Instalación
 
 ## Requisitos

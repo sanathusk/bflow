@@ -3,6 +3,6 @@ contact_links:
   - name: Vulnerabilidad de seguridad
     url: https://github.com/innobytestech/bflow/security/advisories/new
     about: Repórtala en privado con un advisory; no abras un issue público.
-  - name: Guía para probar y reportar
-    url: https://github.com/innobytestech/bflow/blob/main/docs/como-probar-y-reportar.md
-    about: Qué probar y qué datos incluir al reportar un problema.
+  - name: Guía para probar y reportar / Testing and reporting guide
+    url: https://github.com/innobytestech/bflow/blob/main/docs/test-and-report.md
+    about: Elige idioma / Choose language — ES y EN.

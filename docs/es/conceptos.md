@@ -1,3 +1,5 @@
+> 🌐 **Idioma / Language:** **Español** · [English](../en/concepts.md)
+
 # Conceptos
 
 bflow separa lo que **requiere criterio** (entender el problema, diseñar, programar, revisar), que hace el agente, de lo que es **determinista** (estado, transiciones, git, tracker, pruebas, reglas), que hace el CLI. El porqué está en [por-que-y-rumbo.md](por-que-y-rumbo.md); el día a día, en la [guía](guia.md).

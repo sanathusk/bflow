@@ -17,6 +17,8 @@ jobs:
       - name: gofmt
         if: runner.os == 'Linux'
         run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
+      - name: docs-i18n
+        run: go run ./scripts/docs-i18n
       - run: go vet ./...
       - run: go run ./cmd/bflow render --check
       - run: go test -count=1 ./...
