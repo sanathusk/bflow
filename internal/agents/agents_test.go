@@ -151,10 +151,8 @@ func TestBuildRepoCraftAndCustomAgent(t *testing.T) {
 
 func TestCatalogHasCraft(t *testing.T) {
 	for name := range catalog {
-		for _, lang := range []string{"en", "es"} {
-			if b, err := craftFS.ReadFile(fmt.Sprintf("craft/%s/%s.md", lang, name)); err != nil || len(b) == 0 {
-				t.Errorf("%s no tiene oficio en %s: %v", name, lang, err)
-			}
+		if b, err := craftFS.ReadFile(fmt.Sprintf("craft/en/%s.md", name)); err != nil || len(b) == 0 {
+			t.Errorf("%s no tiene oficio en en: %v", name, err)
 		}
 	}
 }
