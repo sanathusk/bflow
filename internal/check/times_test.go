@@ -32,7 +32,7 @@ func TestCompareTimesWarnsOnSuspiciousSpeedup(t *testing.T) {
 	if len(r.Warnings) != 1 || !strings.Contains(r.Warnings[0], "test tardó 23 s y la última corrida verde 227 s") {
 		t.Fatalf("aviso: %v", r.Warnings)
 	}
-	if !strings.Contains(r.Markdown(), "Avisos") || !strings.Contains(r.Summary(), "1 aviso(s)") {
+	if !strings.Contains(r.Markdown(), "Avisos") || (!strings.Contains(r.Summary(), "1 warning(s)") && !strings.Contains(r.Summary(), "1 aviso(s)")) {
 		t.Errorf("el aviso va al reporte y al resumen:\n%s\n%s", r.Markdown(), r.Summary())
 	}
 	// Una corrida sospechosa no baja la referencia: la siguiente también avisa.

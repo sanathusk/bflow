@@ -20,6 +20,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"innobytes.tech/bflow/internal/flow"
+	"innobytes.tech/bflow/internal/i18n"
 	"innobytes.tech/bflow/internal/review"
 )
 
@@ -116,6 +117,8 @@ type UI struct {
 	// Notificación del sistema cuando una tarea espera a la persona. Encendida
 	// salvo notify: false; nunca en CI ni sin escritorio.
 	Notify *bool `yaml:"notify,omitempty"`
+	// Lang es el idioma de la interfaz y de los agentes: en, es.
+	Lang string `yaml:"lang,omitempty"`
 }
 
 type Doctor struct {
@@ -628,6 +631,9 @@ func (c *Config) Validate() error {
 	}
 	validateModels(add, c.Models, "")
 	validateModels(add, c.PersonalModels, " (en "+GlobalPath()+")")
+	if c.UI.Lang != "" && !slices.Contains(i18n.Supported, c.UI.Lang) {
+		add("ui.lang %q no existe (disponibles: %s)", c.UI.Lang, strings.Join(i18n.Supported, ", "))
+	}
 	for i, s := range c.Check.Steps {
 		if s.Name == "" {
 			add("check.steps[%d].name es obligatorio", i)

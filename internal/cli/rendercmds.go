@@ -14,6 +14,7 @@ import (
 	"innobytes.tech/bflow/internal/agents"
 	"innobytes.tech/bflow/internal/config"
 	"innobytes.tech/bflow/internal/eval"
+	"innobytes.tech/bflow/internal/i18n"
 	"innobytes.tech/bflow/internal/output"
 )
 
@@ -51,8 +52,12 @@ const (
 
 // upsertBlock pone el bloque de bflow en doc: lo reemplaza si ya está o lo
 // agrega al final.
-func upsertBlock(doc string) string {
-	block := agentsMDStart + "\n" + agentsMDBody + "\n" + agentsMDEnd
+func upsertBlock(doc string, loc *i18n.Localizer) string {
+	body := agentsMDBody
+	if loc != nil {
+		body = loc.T("render.agents_md_body")
+	}
+	block := agentsMDStart + "\n" + body + "\n" + agentsMDEnd
 	if i := strings.Index(doc, agentsMDStart); i >= 0 {
 		if j := strings.Index(doc[i:], agentsMDEnd); j >= 0 {
 			return doc[:i] + block + doc[i+j+len(agentsMDEnd):]
@@ -65,12 +70,14 @@ func planRender(c *Ctx, cfg *config.Config) (*renderPlan, error) {
 	if len(c.tools()) == 0 {
 		return nil, errors.New("no hay adaptador de agente")
 	}
-	specs, err := agents.Build(cfg.Flow.Core(), cfg.Agents, cfg.Root)
+	fc := cfg.Flow.Core()
+	fc.Loc = c.Env.Loc
+	specs, err := agents.Build(fc, cfg.Agents, cfg.Root)
 	if err != nil {
 		return nil, err
 	}
 	if st, err := os.Stat(filepath.Join(cfg.Root, filepath.FromSlash(eval.CasesDir))); err == nil && st.IsDir() {
-		specs = append(specs, agents.EvalReviewerSpec(cfg.Agents["reviewer"]))
+		specs = append(specs, agents.EvalReviewerSpec(cfg.Agents["reviewer"], c.Env.Loc))
 	}
 	files := map[string][]byte{}
 	p := &renderPlan{Files: files, Unresolved: map[string][]agents.Unresolved{}}
@@ -132,7 +139,7 @@ func planRender(c *Ctx, cfg *config.Config) (*renderPlan, error) {
 	}
 	if have, err := os.ReadFile(filepath.Join(cfg.Root, agentsMD)); err == nil {
 		doc := strings.ReplaceAll(string(have), "\r\n", "\n")
-		if want := upsertBlock(doc); want != doc {
+		if want := upsertBlock(doc, c.Env.Loc); want != doc {
 			p.Files[agentsMD] = []byte(want)
 			p.Changed = append(p.Changed, agentsMD)
 		}
@@ -161,10 +168,10 @@ func runRender(c *Ctx) output.Envelope {
 	if str(c.Flags, "check") == "true" {
 		if len(p.Changed)+len(p.Stale) == 0 {
 			env := output.OK("render_ok", data, nil)
-			env.Text = fmt.Sprintf("%d archivo(s) al día", len(p.Files))
+			env.Text = envLoc(c.Env).T("render.up_to_date", len(p.Files))
 			return env
 		}
-		env := output.Fail("render_outdated", fmt.Errorf("agentes desactualizados: %s; corre bflow render y commitea", strings.Join(append(p.Changed, p.Stale...), ", ")))
+		env := output.FailLoc(envLoc(c.Env), "render_outdated", fmt.Errorf("%s", envLoc(c.Env).T("render.outdated_agents", strings.Join(append(p.Changed, p.Stale...), ", "))))
 		env.Data = data
 		return env
 	}
@@ -174,7 +181,7 @@ func runRender(c *Ctx) output.Envelope {
 	pm := syncPersonalModels(c, cfg, p)
 	data["personal_models"] = pm
 	env := output.OK("rendered", data, nil)
-	env.Text = renderText(p) + personalText(cfg, pm)
+	env.Text = renderText(p, c.Env.Loc) + personalText(cfg, pm)
 	return env
 }
 
@@ -269,17 +276,20 @@ func (p *renderPlan) unresolvedData(c *Ctx) []map[string]any {
 	return out
 }
 
-func renderText(p *renderPlan) string {
+func renderText(p *renderPlan, loc *i18n.Localizer) string {
+	if loc == nil {
+		loc = i18n.DefaultLocalizer()
+	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "%d archivo(s): %d escrito(s), %d sin cambios", len(p.Files), len(p.Changed), len(p.Files)-len(p.Changed))
+	b.WriteString(loc.T("render.files_summary", len(p.Files), len(p.Changed), len(p.Files)-len(p.Changed)))
 	for _, rel := range p.Changed {
 		b.WriteString("\n  + " + rel)
 	}
 	for _, rel := range p.Stale {
-		b.WriteString("\n  - " + rel + " (ya no está en el flujo)")
+		b.WriteString("\n  - " + rel + loc.T("render.stale_suffix"))
 	}
 	if len(p.Changed)+len(p.Stale) > 0 {
-		b.WriteString("\nCommitea los cambios para que el equipo use los mismos agentes.")
+		b.WriteString("\n" + loc.T("render.commit_hint"))
 	}
 	for _, tool := range slices.Sorted(maps.Keys(p.Unresolved)) {
 		for _, u := range p.Unresolved[tool] {

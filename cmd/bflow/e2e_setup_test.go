@@ -85,8 +85,8 @@ func TestInitAngularInteractiveWithProfile(t *testing.T) {
 		t.Errorf("profile list: %v", list.Data)
 	}
 
-	// Respuestas por pipe: perfil acme (opción 2), tracker local (1), usar pasos (s).
-	out, code := r.runIn("2\n1\ns\n", "init")
+	// Respuestas por pipe: idioma en (opción 1), perfil acme (opción 2), tracker local (1), usar pasos (s).
+	out, code := r.runIn("1\n2\n1\ns\n", "init")
 	if code != 0 {
 		t.Fatalf("init (exit %d):\n%s", code, out)
 	}
@@ -127,8 +127,8 @@ func TestInitAsksPanelOnce(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(r.dir, "Makefile"), []byte("test:\n\tgo test\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	// tracker local (1), rama base por defecto, usar pasos (s), solo el panel (2).
-	out, code := r.runIn("1\n\ns\n2\n", "init")
+	// idioma en (1), tracker local (1), rama base por defecto, usar pasos (s), solo el panel (2).
+	out, code := r.runIn("1\n1\n\ns\n2\n", "init")
 	if code != 0 || !strings.Contains(out, "¿qué abro?") || !strings.Contains(out, "al empezar una tarea: solo el panel") {
 		t.Fatalf("init (exit %d):\n%s", code, out)
 	}
@@ -141,7 +141,7 @@ func TestInitAsksPanelOnce(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(other.dir, "Makefile"), []byte("test:\n\tgo test\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if out, code := other.runIn("1\n\ns\n", "init"); code != 0 || strings.Contains(out, "¿qué abro?") {
+	if out, code := other.runIn("1\n1\n\ns\n", "init"); code != 0 || strings.Contains(out, "¿qué abro?") {
 		t.Errorf("segundo init (exit %d):\n%s", code, out)
 	}
 }

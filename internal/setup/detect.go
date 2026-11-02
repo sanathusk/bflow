@@ -209,6 +209,7 @@ type Answers struct {
 	Tracker, TrackerURL, Workspace string
 	Project                        string
 	Host, BaseBranch               string
+	Lang                           string // idioma/language
 	Steps                          []StepProposal
 	Quick                          []string
 	RequireEnv                     []string // variables que el check necesita definidas
@@ -235,6 +236,10 @@ type yamlEnv struct {
 	RequireEnv map[string]string `yaml:"require_env,omitempty"`
 }
 
+type yamlUI struct {
+	Lang string `yaml:"lang,omitempty"`
+}
+
 // agentList es agent: como texto con una herramienta y como lista en línea
 // con varias.
 type agentList []string
@@ -258,6 +263,7 @@ type yamlRepo struct {
 	VCS     *yamlVCS     `yaml:"vcs,omitempty"`
 	Check   *yamlCheck   `yaml:"check,omitempty"`
 	Env     *yamlEnv     `yaml:"env,omitempty"`
+	UI      *yamlUI      `yaml:"ui,omitempty"`
 }
 
 func unless(v, inProfile string) string {
@@ -292,6 +298,9 @@ func RenderYAML(a Answers, p Profile) (string, error) {
 		for _, v := range a.RequireEnv {
 			r.Env.RequireEnv[v] = ""
 		}
+	}
+	if a.Lang != "" {
+		r.UI = &yamlUI{Lang: a.Lang}
 	}
 	var buf bytes.Buffer
 	enc := yaml.NewEncoder(&buf)

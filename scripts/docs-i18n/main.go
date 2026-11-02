@@ -27,7 +27,7 @@ var pairs = [][2]string{
 	{"docs/es/guia.md", "docs/en/guide.md"},
 	{"docs/es/instalacion.md", "docs/en/installation.md"},
 	{"docs/es/por-que-y-rumbo.md", "docs/en/why-and-roadmap.md"},
-	{"README.md", "README.en.md"},
+	{"README.es.md", "README.md"},
 	{"adapters/claude/README.md", "adapters/claude/README.en.md"},
 }
 

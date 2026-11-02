@@ -115,7 +115,8 @@ func runConnect(c *Ctx) output.Envelope {
 	}
 
 	if o.Token == "" {
-		tok, err := readSecret(c.Stdin, c.Stderr, fmt.Sprintf("Token de %s: ", service))
+		loc := envLoc(c.Env)
+		tok, err := readSecret(c.Stdin, c.Stderr, loc.T("connect.token_prompt", service), loc)
 		if err != nil {
 			return output.Fail("no_token", err)
 		}

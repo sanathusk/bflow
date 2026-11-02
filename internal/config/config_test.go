@@ -638,3 +638,17 @@ func TestCheckTestStepDefault(t *testing.T) {
 		t.Errorf("el repo sobrescribe test_step: %q", c.Check.TestStep)
 	}
 }
+
+func TestValidateUILang(t *testing.T) {
+	_, err := Load(fixture(t, "", "ui:\n  lang: fr\n"))
+	if err == nil || !strings.Contains(err.Error(), "ui.lang \"fr\" no existe") {
+		t.Fatalf("expected error for unsupported ui.lang, got %v", err)
+	}
+	c, err := Load(fixture(t, "", "ui:\n  lang: en\n"))
+	if err != nil {
+		t.Fatalf("valid ui.lang 'en' failed: %v", err)
+	}
+	if c.UI.Lang != "en" {
+		t.Errorf("expected Lang to be en, got %q", c.UI.Lang)
+	}
+}

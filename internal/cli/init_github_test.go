@@ -56,7 +56,7 @@ func TestInitGithubTracker(t *testing.T) {
 		}
 	})
 	t.Run("elige un Project de la lista", func(t *testing.T) {
-		env, asked := initEnv(t, "3\n", []tracker.Project{{ID: "acme/7", Name: "Uno"}, {ID: "acme/9", Name: "Dos"}}, nil)
+		env, asked := initEnv(t, "1\n3\n", []tracker.Project{{ID: "acme/7", Name: "Uno"}, {ID: "acme/9", Name: "Dos"}}, nil)
 		if code := Run([]string{"init", "--host", "github", "--tracker", "github"}, env); code != 0 {
 			t.Fatalf("exit %d: %s", code, env.Stdout.(*bytes.Buffer))
 		}
@@ -68,7 +68,7 @@ func TestInitGithubTracker(t *testing.T) {
 		}
 	})
 	t.Run("sin project es válido", func(t *testing.T) {
-		env, _ := initEnv(t, "1\n", []tracker.Project{{ID: "acme/7", Name: "Uno"}}, nil)
+		env, _ := initEnv(t, "1\n1\n", []tracker.Project{{ID: "acme/7", Name: "Uno"}}, nil)
 		if code := Run([]string{"init", "--host", "github", "--tracker", "github"}, env); code != 0 {
 			t.Fatalf("exit %d: %s", code, env.Stdout.(*bytes.Buffer))
 		}

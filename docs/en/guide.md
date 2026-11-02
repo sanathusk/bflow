@@ -2,7 +2,7 @@
 
 # How to work with bflow
 
-This guide is for anyone who has already installed bflow and configured a repo (see [README](../../README.en.md) and [installation](installation.md)). For foundational concepts (phases, lanes, `next`, guarantees), see [concepts](concepts.md); for `bflow.yaml` and trackers, see [configuration](configuration.md); for every command, see [commands](commands.md). It explains what you do and what bflow does at each step, how to tune agents, and what to do when something gets stuck.
+This guide is for anyone who has already installed bflow and configured a repo (see [README](../../README.md) and [installation](installation.md)). For foundational concepts (phases, lanes, `next`, guarantees), see [concepts](concepts.md); for `bflow.yaml` and trackers, see [configuration](configuration.md); for every command, see [commands](commands.md). It explains what you do and what bflow does at each step, how to tune agents, and what to do when something gets stuck.
 
 ## Who does what
 

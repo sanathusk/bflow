@@ -19,6 +19,7 @@ import (
 	"innobytes.tech/bflow/internal/cli"
 	"innobytes.tech/bflow/internal/config"
 	"innobytes.tech/bflow/internal/engine"
+	"innobytes.tech/bflow/internal/i18n"
 	"innobytes.tech/bflow/internal/secrets"
 	"innobytes.tech/bflow/internal/store"
 	"innobytes.tech/bflow/internal/tracker"
@@ -43,6 +44,9 @@ func build(dir string) (*engine.Engine, error) {
 		return nil, err
 	}
 	e := &engine.Engine{Cfg: cfg, Store: store.Open(cfg.Root), Tracker: tr, Now: time.Now}
+	if bundle != nil {
+		e.Loc = bundle.New(i18n.DetectLang(cfg.UI.Lang))
+	}
 	if g != nil {
 		e.Git = g
 	}

@@ -42,7 +42,7 @@ Participar en este proyecto implica aceptar el [código de conducta](CODE_OF_CON
 
 ## Documentación bilingüe
 
-El español es la fuente de verdad; el inglés la sigue en el mismo PR. Los archivos viven en carpetas por idioma:
+El inglés es el idioma principal y la fuente de verdad; el español se mantiene como idioma secundario con soporte completo en el mismo PR. Los archivos viven en carpetas por idioma:
 
 | Español | English |
 |---|---|
@@ -54,7 +54,7 @@ El español es la fuente de verdad; el inglés la sigue en el mismo PR. Los arch
 | `docs/es/guia.md` | `docs/en/guide.md` |
 | `docs/es/instalacion.md` | `docs/en/installation.md` |
 | `docs/es/por-que-y-rumbo.md` | `docs/en/why-and-roadmap.md` |
-| `README.md` | `README.en.md` |
+| `README.es.md` | `README.md` |
 | `adapters/claude/README.md` | `adapters/claude/README.en.md` |
 
 Reglas:

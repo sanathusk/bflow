@@ -16,6 +16,7 @@ import (
 	"innobytes.tech/bflow/internal/engine"
 	"innobytes.tech/bflow/internal/eval"
 	"innobytes.tech/bflow/internal/guard"
+	"innobytes.tech/bflow/internal/i18n"
 	"innobytes.tech/bflow/internal/metrics"
 	"innobytes.tech/bflow/internal/output"
 	"innobytes.tech/bflow/internal/secrets"
@@ -29,6 +30,7 @@ type Env struct {
 	Stdin   io.Reader
 	Version string
 	Dir     string // directorio de trabajo
+	Loc     *i18n.Localizer
 
 	// Build construye el engine del repo que contiene dir con los adaptadores
 	// que indique su configuración. Lo provee cmd/bflow.
@@ -73,6 +75,24 @@ var registry = map[string]*Command{}
 // Register agrega un comando. Nombres compuestos ("env check") se registran con espacio.
 func Register(c *Command) { registry[c.Name] = c }
 
+func envLoc(env *Env) *i18n.Localizer {
+	if env != nil && env.Loc != nil {
+		return env.Loc
+	}
+	return i18n.DefaultLocalizer()
+}
+
+func cmdSummary(cmd *Command, loc *i18n.Localizer) string {
+	if loc == nil {
+		loc = i18n.DefaultLocalizer()
+	}
+	key := "cli.cmd." + strings.ReplaceAll(cmd.Name, " ", "_")
+	if s := loc.T(key); s != key {
+		return s
+	}
+	return cmd.Summary
+}
+
 func init() {
 	Register(&Command{Name: "version", Summary: "versión de bflow", Run: func(c *Ctx) output.Envelope {
 		e := output.OK("version", map[string]any{"version": c.Version}, nil)
@@ -89,9 +109,10 @@ func init() {
 		}
 		sort.Strings(names)
 		var b strings.Builder
-		b.WriteString("Byteflow by innobytes — uso: bflow <comando> [--json]\n\n")
+		loc := envLoc(c.Env)
+		b.WriteString(loc.T("cli.help_header") + "\n\n")
 		for _, n := range names {
-			fmt.Fprintf(&b, "  %-22s %s\n", n, registry[n].Summary)
+			fmt.Fprintf(&b, "  %-22s %s\n", n, cmdSummary(registry[n], loc))
 		}
 		e := output.OK("help", map[string]any{"commands": names}, nil)
 		e.Text = strings.TrimRight(b.String(), "\n")
@@ -116,7 +137,8 @@ func Run(args []string, env *Env) int {
 		if name == "" {
 			cmd, params = homeCommand, nil
 		} else {
-			return emit(env, asJSON, output.Fail("unknown_command", fmt.Errorf("comando desconocido: %q (bflow help)", name)))
+			l := envLoc(env)
+			return emit(env, asJSON, output.FailLoc(l, "unknown_command", fmt.Errorf("%s", l.T("cli.unknown_command", name))))
 		}
 	}
 	fs := flag.NewFlagSet(cmd.Name, flag.ContinueOnError)

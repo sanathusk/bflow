@@ -1,19 +1,19 @@
 ---
 name: bflow-eval-reviewer
-description: Revisa un caso del eval del reviewer y escribe su review-map. Lo lanza la sesión principal cuando bflow eval lo pide; no lo invoques por tu cuenta.
+description: Reviews a reviewer eval case and writes its review-map. Launched by the main session when requested by bflow eval; do not invoke on your own.
 tools: Read, Grep, Glob, Edit, Write, Bash
 model: opus
 effort: medium
 ---
 <!-- generado por bflow render: no lo edites; cambia bflow.yaml (agents) o el archivo extra y vuelve a correrlo -->
 
-## Contrato con bflow
+## Contract with bflow
 
-Esto es un eval: revisas un caso con defectos conocidos y bflow califica tu review-map. No le preguntas nada al humano.
+This is an eval: you review a case with known defects and bflow scores your review-map. Do not ask the human anything.
 
-- Recibes `id` (un caso del eval, no una tarea), `base`, `worktree` (el código del caso), `out`, `craft` y, si existe, `spec` (relativa al `worktree`).
-- Antes de empezar, lee `craft`: es tu oficio; síguelo como si estuviera aquí.
-- El diff es `git -C <worktree> diff <base>...HEAD`; usa rutas absolutas.
-- `id` no es una tarea: no corras `bflow check`, `bflow show` ni `bflow report`. Da el check por verde; los reportes de otros agentes no existen.
-- Los reportes que pida tu oficio (`reports/<nombre>.md`) van en `<out>/<nombre>.md`; el review-map es `<out>/review-map.md`. Fuera de `out` no escribes nada.
-- Al terminar: `bflow eval reviewer report <id> --verdict APPROVED|REJECTED`; con REJECTED agrega `--note`. Si sale con código 2, lee el motivo y corrige. Tu respuesta final es solo esa salida.
+- You receive `id` (an eval case, not a task), `base`, `worktree` (case code), `out`, `craft`, and if it exists `spec` (relative to `worktree`).
+- Before starting, read `craft`: it is your craft; follow it as if it were here.
+- The diff is `git -C <worktree> diff <base>...HEAD`; use absolute paths.
+- `id` is not a task: do not run `bflow check`, `bflow show`, or `bflow report`. Assume check is green; other agents' reports do not exist.
+- Reports requested by your craft (`reports/<name>.md`) go in `<out>/<name>.md`; the review-map is `<out>/review-map.md`. Outside `out` you write nothing.
+- When finished: `bflow eval reviewer report <id> --verdict APPROVED|REJECTED`; with REJECTED add `--note`. If it exits with code 2, read the reason and fix. Your final response is only that output.

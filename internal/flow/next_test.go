@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"innobytes.tech/bflow/internal/i18n"
 	"innobytes.tech/bflow/internal/output"
 )
 
@@ -272,7 +273,7 @@ func TestIntakeNext(t *testing.T) {
 	if n.Action != "ask" || n.Gate != "intake" || n.Skill != "intake" {
 		t.Fatalf("next: %+v", n)
 	}
-	if !strings.Contains(n.Question, "¿Creamos una tarea nueva") {
+	if !strings.Contains(n.Question, "¿Creamos una tarea nueva") && !strings.Contains(n.Question, "Create a new task") {
 		t.Errorf("pregunta: %q", n.Question)
 	}
 	if got := strings.Join(optIDs(n), ","); got != "new,existing" {
@@ -412,5 +413,25 @@ func TestBlockedUnblockNote(t *testing.T) {
 	o = find(NextFor(cfg, m.State))
 	if !o.NeedsNote || !strings.Contains(o.Command, "--note") {
 		t.Errorf("bloqueo manual: %+v", o)
+	}
+}
+
+func TestNextLocalization(t *testing.T) {
+	b, err := i18n.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfgEn := testConfig()
+	cfgEn.Loc = b.New("en")
+	nextEn := NextFor(cfgEn, State{ID: "T-1", Phase: Done})
+	if nextEn.Reason != "task closed" {
+		t.Errorf("en reason: %q, want 'task closed'", nextEn.Reason)
+	}
+
+	cfgEs := testConfig()
+	cfgEs.Loc = b.New("es")
+	nextEs := NextFor(cfgEs, State{ID: "T-1", Phase: Done})
+	if nextEs.Reason != "tarea cerrada" {
+		t.Errorf("es reason: %q, want 'tarea cerrada'", nextEs.Reason)
 	}
 }

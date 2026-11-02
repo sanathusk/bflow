@@ -82,7 +82,7 @@ func TestRenderedAgentsStablePrefix(t *testing.T) {
 			}
 		}
 		_, body, ok := strings.Cut(string(doc), "\n---\n")
-		if !ok || !strings.HasPrefix(body, agents.GeneratedMark+"\n\n## Contrato con bflow") {
+		if !ok || (!strings.HasPrefix(body, agents.GeneratedMark+"\n\n## Contract with bflow") && !strings.HasPrefix(body, agents.GeneratedMark+"\n\n## Contrato con bflow")) {
 			t.Errorf("%s: el cuerpo empieza con la marca y el contrato: %q", path, body[:min(len(body), 80)])
 		}
 	}

@@ -19,6 +19,7 @@ import (
 	"innobytes.tech/bflow/internal/agents"
 	"innobytes.tech/bflow/internal/config"
 	"innobytes.tech/bflow/internal/envcheck"
+	"innobytes.tech/bflow/internal/i18n"
 	"innobytes.tech/bflow/internal/metrics"
 	"innobytes.tech/bflow/internal/output"
 	"innobytes.tech/bflow/internal/setup"
@@ -31,6 +32,7 @@ type prompter struct {
 	r   *bufio.Reader
 	w   io.Writer
 	yes bool
+	loc *i18n.Localizer
 }
 
 func newPrompter(c *Ctx, yes bool) *prompter {
@@ -38,7 +40,7 @@ func newPrompter(c *Ctx, yes bool) *prompter {
 	if in == nil {
 		in = strings.NewReader("")
 	}
-	return &prompter{r: bufio.NewReader(in), w: c.Stderr, yes: yes}
+	return &prompter{r: bufio.NewReader(in), w: c.Stderr, yes: yes, loc: envLoc(c.Env)}
 }
 
 func (p *prompter) line() string {
@@ -71,7 +73,11 @@ func (p *prompter) choose(q string, opts []string, def int) int {
 	for i, o := range opts {
 		fmt.Fprintf(p.w, "  %d. %s\n", i+1, o)
 	}
-	fmt.Fprintf(p.w, "elige [%d]: ", def+1)
+	loc := p.loc
+	if loc == nil {
+		loc = i18n.DefaultLocalizer()
+	}
+	fmt.Fprintf(p.w, "%s", loc.T("init.prompt_choose", def+1))
 	s := p.line()
 	if n, err := strconv.Atoi(s); err == nil && n >= 1 && n <= len(opts) {
 		return n - 1
@@ -97,7 +103,7 @@ func gitOut(dir string, args ...string) string {
 func init() {
 	Register(&Command{Name: "init", Summary: "crea bflow.yaml detectando stack, remoto, rama base y pasos de check: init [--yes] [--profile p] [--tracker local|plane|github] [--project P (github: owner/N)]|plane] [--project P]",
 		Setup: func(fs *flag.FlagSet) {
-			for _, f := range []string{"stack", "tracker", "project", "url", "workspace", "profile", "host", "base", "agent"} {
+			for _, f := range []string{"stack", "tracker", "project", "url", "workspace", "profile", "host", "base", "agent", "lang"} {
 				fs.String(f, "", "")
 			}
 			fs.Bool("yes", false, "no preguntar: usar lo detectado y los valores por defecto")
@@ -169,9 +175,35 @@ func runInit(c *Ctx) output.Envelope {
 		return output.Fail("usage", err)
 	}
 	p := newPrompter(c, str(c.Flags, "yes") == "true")
+
+	// Idioma / Language
+	langFlag := str(c.Flags, "lang")
+	if langFlag != "" && !slices.Contains(i18n.Supported, langFlag) {
+		return output.Fail("usage", fmt.Errorf("idioma/lang %q no existe (disponibles: %s)", langFlag, strings.Join(i18n.Supported, ", ")))
+	}
+	if langFlag == "" {
+		if !p.yes {
+			detected := i18n.DetectLang("")
+			defIdx := 0
+			if detected == "es" {
+				defIdx = 1
+			}
+			langOpts := []string{"en (English)", "es (Español)"}
+			langIdx := p.choose("Language / Idioma", langOpts, defIdx)
+			langFlag = i18n.Supported[langIdx]
+		} else {
+			langFlag = i18n.DetectLang("")
+		}
+	}
+	loc := i18n.DefaultBundle().New(langFlag)
+	if c.Env != nil {
+		c.Env.Loc = loc
+	}
+	p.loc = loc
+
 	det := setup.Detect(root, setup.Tools{Has: func(n string) bool { _, err := exec.LookPath(n); return err == nil }})
 
-	a := setup.Answers{Stack: det.Stack, Steps: det.Steps, Quick: det.Quick, RequireEnv: det.DBEnv}
+	a := setup.Answers{Stack: det.Stack, Steps: det.Steps, Quick: det.Quick, RequireEnv: det.DBEnv, Lang: langFlag}
 	if s := str(c.Flags, "stack"); s != "" {
 		a.Stack = s
 	}
@@ -183,12 +215,13 @@ func runInit(c *Ctx) output.Envelope {
 	}
 	a.Profile = str(c.Flags, "profile")
 	if a.Profile == "" && len(profiles) > 0 {
-		names := []string{"ninguno"}
+		noneLabel := loc.T("init.profile_none")
+		names := []string{noneLabel}
 		for n := range profiles {
 			names = append(names, n)
 		}
 		sort.Strings(names[1:])
-		if i := p.choose("¿Qué perfil usa este repo?", names, 0); i > 0 {
+		if i := p.choose(loc.T("init.prompt_profile"), names, 0); i > 0 {
 			a.Profile = names[i]
 		}
 	}
@@ -212,23 +245,23 @@ func runInit(c *Ctx) output.Envelope {
 	// Tracker
 	a.Tracker = firstNonEmpty(str(c.Flags, "tracker"), prof.Tracker)
 	if a.Tracker == "" {
-		names, labels := []string{"local", "plane"}, []string{"local (archivos en .bflow, sin cuenta)", "plane"}
+		names, labels := []string{"local", "plane"}, []string{loc.T("init.tracker_local_label"), "plane"}
 		if a.Host == "github" {
-			names, labels = append(names, "github"), append(labels, "github (issues del repo y, si quieres, un Project)")
+			names, labels = append(names, "github"), append(labels, loc.T("init.tracker_github_label"))
 		}
-		a.Tracker = names[p.choose("¿Qué tracker usa?", labels, 0)]
+		a.Tracker = names[p.choose(loc.T("init.prompt_tracker"), labels, 0)]
 	}
 	if a.Tracker == "github" && a.Host != "github" {
-		return output.Fail("incomplete", errors.New("el tracker github exige host github (--host github, o un remoto de GitHub)"))
+		return output.FailLoc(loc, "incomplete", errors.New(loc.T("init.github_needs_github_host")))
 	}
 	if a.Tracker == "plane" {
 		a.TrackerURL = firstNonEmpty(str(c.Flags, "url"), prof.URL)
 		if a.TrackerURL == "" {
-			a.TrackerURL = p.ask("URL de Plane", "")
+			a.TrackerURL = p.ask(loc.T("init.prompt_plane_url"), "")
 		}
 		a.Workspace = firstNonEmpty(str(c.Flags, "workspace"), prof.Workspace)
 		if a.Workspace == "" {
-			a.Workspace = p.ask("Workspace de Plane (slug)", "")
+			a.Workspace = p.ask(loc.T("init.prompt_plane_workspace"), "")
 		}
 		a.Project = strings.ToUpper(str(c.Flags, "project"))
 		if a.Project == "" {
@@ -243,13 +276,13 @@ func runInit(c *Ctx) output.Envelope {
 				}
 			}
 			if len(ids) > 0 && !p.yes {
-				a.Project = strings.Fields(ids[p.choose("¿Qué proyecto de Plane?", ids, 0)])[0]
+				a.Project = strings.Fields(ids[p.choose(loc.T("init.prompt_plane_project"), ids, 0)])[0]
 			} else {
-				a.Project = strings.ToUpper(p.ask("Identificador del proyecto (p. ej. API)", ""))
+				a.Project = strings.ToUpper(p.ask(loc.T("init.prompt_plane_project_id"), ""))
 			}
 		}
 		if a.TrackerURL == "" || a.Workspace == "" || a.Project == "" {
-			return output.Fail("incomplete", errors.New("plane necesita --url, --workspace y --project (o un perfil que los tenga)"))
+			return output.FailLoc(loc, "incomplete", errors.New(loc.T("init.error_plane_incomplete")))
 		}
 	} else if a.Tracker == "github" {
 		a.Project = str(c.Flags, "project")
@@ -259,11 +292,11 @@ func runInit(c *Ctx) output.Envelope {
 				fmt.Fprintln(c.Stderr, "no se pudieron listar los Projects:", err)
 			}
 			if len(ps) > 0 && !p.yes {
-				ids := []string{"sin project (la fase es una etiqueta bflow:*)"}
+				ids := []string{loc.T("init.github_project_none")}
 				for _, pr := range ps {
 					ids = append(ids, pr.ID+" · "+pr.Name)
 				}
-				if i := p.choose("¿Qué Project de GitHub?", ids, 0); i > 0 {
+				if i := p.choose(loc.T("init.prompt_github_project"), ids, 0); i > 0 {
 					a.Project = strings.Fields(ids[i])[0]
 				}
 			}
@@ -283,7 +316,7 @@ func runInit(c *Ctx) output.Envelope {
 	}
 	a.BaseBranch = firstNonEmpty(str(c.Flags, "base"), prof.BaseBranch)
 	if a.BaseBranch == "" {
-		a.BaseBranch = p.ask("Rama base de los PR", setup.PickBase(head, branches))
+		a.BaseBranch = p.ask(loc.T("init.prompt_base_branch"), setup.PickBase(head, branches))
 	}
 	a.Agent = prof.Agent
 	if len(flagAgents) > 0 {
@@ -299,15 +332,17 @@ func runInit(c *Ctx) output.Envelope {
 	}
 
 	if len(a.Steps) > 0 && !p.yes {
-		fmt.Fprintln(c.Stderr, "Pasos de check propuestos:")
+		fmt.Fprintln(c.Stderr, loc.T("init.proposed_check_steps"))
 		for _, s := range a.Steps {
 			opt := ""
 			if s.Optional {
-				opt = " (opcional: " + s.Needs + " no está instalado)"
+				opt = loc.T("init.check_step_optional", s.Needs)
 			}
 			fmt.Fprintf(c.Stderr, "  - %s: %s%s\n", s.Name, s.Run, opt)
 		}
-		if strings.HasPrefix(strings.ToLower(p.ask("¿Usarlos? (s/n)", "s")), "n") {
+		defAns := loc.T("init.prompt_use_steps_def")
+		ans := strings.ToLower(p.ask(loc.T("init.prompt_use_steps"), defAns))
+		if strings.HasPrefix(ans, "n") {
 			a.Steps, a.Quick = nil, nil
 		}
 	}
@@ -339,7 +374,7 @@ func runInit(c *Ctx) output.Envelope {
 		return output.Fail("write", err)
 	}
 	if _, err := config.Load(root); err != nil {
-		return output.Fail("invalid", fmt.Errorf("el bflow.yaml generado no es válido (repórtalo): %w", err))
+		return output.Fail("invalid", fmt.Errorf("%s", loc.T("init.yaml_generated_invalid", err)))
 	}
 	_ = config.RememberRepo(root)
 	panelText := ""
@@ -368,8 +403,10 @@ func runInit(c *Ctx) output.Envelope {
 	}
 	next = append(next, "bflow doctor")
 	env := output.OK("initialized", data, nil)
-	env.Text = fmt.Sprintf("bflow.yaml creado · stack %s · tracker %s · base %s · %d pasos de check%s\nsiguiente:\n  %s",
-		orDash(a.Stack), a.Tracker, orDash(a.BaseBranch), len(a.Steps), panelText, strings.Join(next, "\n  "))
+	env.Text = fmt.Sprintf("%s\n%s\n  %s",
+		loc.T("init.created", orDash(a.Stack), a.Tracker, orDash(a.BaseBranch), len(a.Steps), panelText),
+		loc.T("init.next_label"),
+		strings.Join(next, "\n  "))
 	if m := bannerFor(c); m != bannerOff {
 		env.Text = renderBanner(m, c.Version) + "\n" + env.Text
 	}

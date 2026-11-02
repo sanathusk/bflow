@@ -7,11 +7,15 @@ import (
 
 	"innobytes.tech/bflow/internal/engine"
 	"innobytes.tech/bflow/internal/flow"
+	"innobytes.tech/bflow/internal/i18n"
 	"innobytes.tech/bflow/internal/output"
 )
 
 // renderOutcome es el texto para humanos de un comando de flujo.
-func renderOutcome(o engine.Outcome) string {
+func renderOutcome(o engine.Outcome, loc *i18n.Localizer) string {
+	if loc == nil {
+		loc = i18n.DefaultLocalizer()
+	}
 	var b strings.Builder
 	head := o.ID + " · "
 	if o.To != "" {
@@ -20,66 +24,72 @@ func renderOutcome(o engine.Outcome) string {
 		head += string(o.Phase)
 	}
 	if o.Round > 0 {
-		head += fmt.Sprintf(" · ronda %d", o.Round)
+		head += " · " + loc.T("render.round_label", o.Round)
 	}
 	if o.Branch != "" {
-		head += " · rama " + o.Branch
+		head += " · " + loc.T("render.branch", o.Branch)
 	}
 	b.WriteString(head + "\n")
 	for _, w := range o.Warnings {
 		b.WriteString("  ⚠ " + w + "\n")
 	}
-	b.WriteString(renderNext(o.Next))
+	b.WriteString(renderNext(o.Next, loc))
 	return strings.TrimRight(b.String(), "\n")
 }
 
-func renderView(v engine.View) string {
+func renderView(v engine.View, loc *i18n.Localizer) string {
+	if loc == nil {
+		loc = i18n.DefaultLocalizer()
+	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s · %s\n", v.ID, v.Title)
-	line := "  fase: " + string(v.Phase)
+	line := "  " + loc.T("render.phase_label", string(v.Phase))
 	if v.Lane != "" {
-		line += " · carril " + string(v.Lane)
+		line += " · " + loc.T("render.lane_label", string(v.Lane))
 	}
 	if v.Gate != "" {
-		line += " · gate " + v.Gate
+		line += " · " + loc.T("render.gate_label", v.Gate)
 	}
 	if v.Round > 0 {
-		line += fmt.Sprintf(" · ronda %d", v.Round)
+		line += " · " + loc.T("render.round_label", v.Round)
 	}
 	if v.Since != nil && !v.Since.IsZero() {
-		line += " · hace " + human(time.Since(*v.Since))
+		line += " · " + loc.T("render.ago", human(time.Since(*v.Since), loc))
 	}
 	b.WriteString(line + "\n")
 	if v.TrackerState != "" {
-		l := "  en el tracker: " + v.TrackerState
+		l := "  " + loc.T("render.in_tracker", v.TrackerState)
 		if v.TrackerPhase != "" && v.TrackerPhase != flow.Backlog {
-			l += fmt.Sprintf(" (%s): si ya estaba en curso con el harness anterior, bflow import --from harness --state-only", v.TrackerPhase)
+			l += loc.T("render.in_tracker_hint", v.TrackerPhase)
 		}
 		b.WriteString(l + "\n")
 	}
 	if v.Branch != "" {
-		b.WriteString("  rama: " + v.Branch + "\n")
+		b.WriteString("  " + loc.T("render.branch_label", v.Branch) + "\n")
 	}
 	if v.PR != nil {
-		b.WriteString("  PR: " + v.PR.URL + "\n")
+		b.WriteString("  " + loc.T("render.pr_label", v.PR.URL) + "\n")
 	}
 	if v.Blocked != "" {
-		b.WriteString("  bloqueada: " + v.Blocked + "\n")
+		b.WriteString("  " + loc.T("render.blocked_label", v.Blocked) + "\n")
 	}
 	if v.Pending > 0 {
-		fmt.Fprintf(&b, "  ⚠ %d cambio(s) sin sincronizar con el tracker (bflow sync)\n", v.Pending)
+		b.WriteString("  " + loc.T("render.unsync_warning", v.Pending) + "\n")
 	}
-	b.WriteString(renderNext(v.Next))
+	b.WriteString(renderNext(v.Next, loc))
 	return strings.TrimRight(b.String(), "\n")
 }
 
-func renderNext(n output.Next) string {
+func renderNext(n output.Next, loc *i18n.Localizer) string {
+	if loc == nil {
+		loc = i18n.DefaultLocalizer()
+	}
 	var b strings.Builder
 	switch n.Action {
 	case output.ActionAsk:
-		fmt.Fprintf(&b, "Siguiente: decidir (gate %s)", n.Gate)
+		b.WriteString(loc.T("render.next_decide", n.Gate))
 		if n.Skill != "" {
-			fmt.Fprintf(&b, " · skill %s", n.Skill)
+			b.WriteString(" · " + loc.T("render.skill_label", n.Skill))
 		}
 		if n.Display != "" {
 			b.WriteString("\n\n" + n.Display + "\n")
@@ -87,7 +97,7 @@ func renderNext(n output.Next) string {
 		b.WriteString("\n  " + n.Question + "\n")
 		if n.Display == "" {
 			for _, s := range n.Show {
-				b.WriteString("  antes, mostrar: " + s + "\n")
+				b.WriteString("  " + loc.T("render.show_before", s) + "\n")
 			}
 		}
 		for i, o := range n.Options {
@@ -98,19 +108,19 @@ func renderNext(n output.Next) string {
 			b.WriteString("\n")
 		}
 	case output.ActionSpawn:
-		mode := "lanzar"
+		mode := loc.T("render.spawn_mode")
 		if n.Parallel {
-			mode = "lanzar en paralelo"
+			mode = loc.T("render.spawn_parallel_mode")
 		}
-		fmt.Fprintf(&b, "Siguiente: %s\n", mode)
+		b.WriteString(loc.T("render.next_spawn", mode) + "\n")
 		for _, a := range n.Agents {
-			fmt.Fprintf(&b, "  · %s (%s)\n    reporta: %s\n", a.Agent, argLine(a.Args), a.Report)
+			fmt.Fprintf(&b, "  · %s (%s)\n    %s\n", a.Agent, argLine(a.Args), loc.T("render.reports_label", a.Report))
 		}
 	case output.ActionWait:
-		b.WriteString("Siguiente: esperar · " + n.Reason + "\n")
+		b.WriteString(loc.T("render.next_wait", n.Reason) + "\n")
 	case output.ActionDone:
 		if n.Reason != "" {
-			b.WriteString("Nada pendiente · " + n.Reason + "\n")
+			b.WriteString(loc.T("render.nothing_pending", n.Reason) + "\n")
 		}
 	}
 	return b.String()
@@ -129,10 +139,13 @@ func argLine(args map[string]string) string {
 	return strings.Join(parts, " ")
 }
 
-func human(d time.Duration) string {
+func human(d time.Duration, loc *i18n.Localizer) string {
+	if loc == nil {
+		loc = i18n.DefaultLocalizer()
+	}
 	switch {
 	case d < time.Minute:
-		return "segundos"
+		return loc.T("render.seconds")
 	case d < time.Hour:
 		return fmt.Sprintf("%dm", int(d.Minutes()))
 	case d < 48*time.Hour:

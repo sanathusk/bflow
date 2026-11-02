@@ -102,7 +102,7 @@ func runInstall(c *Ctx) output.Envelope {
 		warns = append(warns, fmt.Sprintf("%s ya existe y no lo generó bflow: renómbralo o bórralo y corre bflow render", strings.Join(p.Conflicts, ", ")))
 	default:
 		data["render"] = true
-		text.WriteString("\nagentes: " + renderText(p))
+		text.WriteString("\nagentes: " + renderText(p, c.Env.Loc))
 		pm := syncPersonalModels(c, cfg, p)
 		data["personal_models"] = pm
 		text.WriteString(personalText(cfg, pm))

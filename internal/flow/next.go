@@ -1,7 +1,6 @@
 package flow
 
 import (
-	"fmt"
 	"regexp"
 	"slices"
 	"strconv"
@@ -41,30 +40,30 @@ func AllowFiles(text string) []string {
 func NextFor(cfg Config, s State) output.Next {
 	switch s.Phase {
 	case Done:
-		return output.Next{Action: output.ActionDone, Reason: "tarea cerrada"}
+		return output.Next{Action: output.ActionDone, Reason: cfg.t("flow.task_closed")}
 	case Dropped:
-		return output.Next{Action: output.ActionDone, Reason: "tarea retirada"}
+		return output.Next{Action: output.ActionDone, Reason: cfg.t("flow.task_dropped")}
 	case InReview:
 		return output.Next{Action: output.ActionWait,
-			Reason: "se espera el merge del PR; `bflow panel` cierra la tarea al detectarlo"}
+			Reason: cfg.t("flow.wait_merge")}
 	case Blocked:
 		reason := ""
 		if s.Block != nil {
 			reason = s.Block.Reason
 		}
-		unblock := output.Option{ID: "unblock", Label: "Desbloquear y continuar", Command: cmd("unblock", s.ID)}
+		unblock := output.Option{ID: "unblock", Label: cfg.t("flow.option_unblock"), Command: cmd("unblock", s.ID)}
 		if s.Block != nil && s.Block.Manual {
-			unblock = output.Option{ID: "unblock", Label: "Desbloquear y continuar (con --note el agente ve el resultado)", NeedsNote: true, Command: cmd("unblock", s.ID, `--note "<resultado>"`)}
+			unblock = output.Option{ID: "unblock", Label: cfg.t("flow.option_unblock_manual"), NeedsNote: true, Command: cmd("unblock", s.ID, `--note "<resultado>"`)}
 		}
 		return output.Next{Action: output.ActionAsk, Gate: "blocked",
-			Question: fmt.Sprintf("%s está bloqueada: %s. ¿Se resolvió?", s.ID, reason),
+			Question: cfg.t("flow.blocked_question", s.ID, reason),
 			Options: []output.Option{
 				unblock,
-				{ID: "keep", Label: "Sigue bloqueada"},
+				{ID: "keep", Label: cfg.t("flow.option_keep_blocked")},
 			}}
 	case Backlog:
 		return output.Next{Action: output.ActionAsk, Gate: string(GateLane),
-			Question: fmt.Sprintf("¿En qué carril va %s?", s.ID),
+			Question: cfg.t("flow.gate_lane_question", s.ID),
 			Options:  laneOptions(cfg, s.ID)}
 	}
 	if s.Scout == ScoutPending {
@@ -80,22 +79,28 @@ func cmd(verb, id string, extra ...string) string {
 	return strings.Join(append([]string{"bflow", verb, id}, extra...), " ")
 }
 
-var laneHelp = map[Lane]string{
-	Full:   "Feature normal: discovery, spec, contrato T1, implementación, calidad, walkthrough.",
-	Light:  "Feature pequeña (pocos archivos, sin migración, sin cambio de contrato ni permisos): spec breve, sin T1.",
-	Hotfix: "Defecto ya mergeado que no añade alcance: directo a implementar; la compuerta de calidad no se salta.",
+func laneHelp(cfg Config, l Lane) string {
+	switch l {
+	case Full:
+		return cfg.t("flow.lane_full_desc")
+	case Light:
+		return cfg.t("flow.lane_light_desc")
+	case Hotfix:
+		return cfg.t("flow.lane_hotfix_desc")
+	}
+	return ""
 }
 
 func laneOptions(cfg Config, id string) []output.Option {
 	var out []output.Option
 	for _, l := range []Lane{Full, Light, Hotfix} {
 		if _, ok := cfg.Lanes[l]; ok {
-			out = append(out, output.Option{ID: string(l), Label: string(l), Description: laneHelp[l],
+			out = append(out, output.Option{ID: string(l), Label: string(l), Description: laneHelp(cfg, l),
 				Command: cmd("start", id, "--lane", string(l))})
 		}
 	}
 	for l := range cfg.Lanes {
-		if _, known := laneHelp[l]; !known {
+		if l != Full && l != Light && l != Hotfix {
 			out = append(out, output.Option{ID: string(l), Label: string(l), Command: cmd("start", id, "--lane", string(l))})
 		}
 	}
@@ -112,13 +117,13 @@ func IntakeNext(cfg Config) output.Next {
 	for _, o := range laneOptions(cfg, "") {
 		lanes = append(lanes, o.ID)
 	}
-	desc := "Carriles: " + strings.Join(lanes, ", ")
+	desc := cfg.t("flow.intake_lanes_prefix") + strings.Join(lanes, ", ")
 	return output.Next{Action: output.ActionAsk, Gate: IntakeGate, Skill: "intake",
-		Question: "¿Creamos una tarea nueva para la idea o usamos una que ya existe?",
+		Question: cfg.t("flow.intake_question"),
 		Options: []output.Option{
-			{ID: "new", Label: "Crear tarea nueva", Description: desc,
+			{ID: "new", Label: cfg.t("flow.intake_new_label"), Description: desc,
 				Command: `bflow new --lane <carril> --title "<título>" --file <idea.md>`},
-			{ID: "existing", Label: "Usar una existente", Description: desc,
+			{ID: "existing", Label: cfg.t("flow.intake_existing_label"), Description: desc,
 				Command: "bflow start <ID> --lane <carril>"},
 		}}
 }
@@ -142,8 +147,8 @@ func gateNext(cfg Config, s State) output.Next {
 	switch g.Name {
 	case GateDiscovery:
 		n.Skill = "discovery"
-		n.Question = "Conduce el discovery (alcance, datos clave, errores, restricciones; máx. 3 preguntas por tanda). Cuando no quede ambigüedad, ciérralo pasando el discovery completo por stdin."
-		n.Options = []output.Option{{ID: "approve", Label: "Cerrar discovery",
+		n.Question = cfg.t("flow.gate_discovery_question")
+		n.Options = []output.Option{{ID: "approve", Label: cfg.t("flow.gate_discovery_close"),
 			Command: cmd("approve", id, "--gate", "discovery", "--stdin")}}
 	case GateSpec:
 		n.Skill = "approve"
@@ -151,90 +156,90 @@ func gateNext(cfg Config, s State) output.Next {
 		if cfg.UI {
 			n.Show = append(n.Show, cmd("show", id, "spec", "--section", "ui-blueprint"))
 		}
-		n.Question = "¿Apruebas el spec?"
+		n.Question = cfg.t("flow.gate_spec_question")
 		n.Options = []output.Option{
-			approveOpt(id, g.Name, "Aprobar"),
-			rejectOpt(id, g.Name, "changes", "Pedir cambios puntuales", ""),
+			approveOpt(id, g.Name, cfg.t("flow.option_approve")),
+			rejectOpt(id, g.Name, "changes", cfg.t("flow.option_changes"), ""),
 		}
 	case GateSplit:
-		n.Question = "El spec-author propone dividir la feature: " + g.Note
+		n.Question = cfg.t("flow.gate_split_question", g.Note)
 		n.Show = []string{cmd("show", id, "brief")}
 		n.Options = []output.Option{
-			approveOpt(id, g.Name, "Dividir: crear las hijas y retirar "+id),
-			rejectOpt(id, g.Name, "keep", "Seguir como una sola feature", ""),
+			approveOpt(id, g.Name, cfg.t("flow.option_split_approve", id)),
+			rejectOpt(id, g.Name, "keep", cfg.t("flow.option_split_keep"), ""),
 		}
 	case GateContract:
 		n.Show = []string{cmd("show", id, "contract")}
-		n.Question = "¿Apruebas el contrato T1 (interfaces, firmas y nombres de pruebas)?"
+		n.Question = cfg.t("flow.gate_contract_question")
 		n.Options = []output.Option{
-			approveOpt(id, g.Name, "Continuar"),
-			rejectOpt(id, g.Name, "adjust", "Ajustar el contrato", ""),
+			approveOpt(id, g.Name, cfg.t("flow.option_continue")),
+			rejectOpt(id, g.Name, "adjust", cfg.t("flow.option_contract_adjust"), ""),
 		}
 		if cfg.has(s.Lane, Spec) {
-			n.Options = append(n.Options, rejectOpt(id, g.Name, "spec", "Volver a spec", Spec))
+			n.Options = append(n.Options, rejectOpt(id, g.Name, "spec", cfg.t("flow.option_back_to_spec"), Spec))
 		}
 	case GateDecision:
-		n.Question = fmt.Sprintf("%s necesita una decisión: %s", g.Agent, g.Note)
+		n.Question = cfg.t("flow.gate_decision_question", g.Agent, g.Note)
 		for i, o := range g.Options {
 			opt := output.Option{ID: "opt" + strconv.Itoa(i+1), Label: o,
 				Command: cmd("approve", id, "--gate", "decision", "--choice", strconv.Itoa(i+1))}
 			var lines []string
 			for _, f := range AllowFiles(o) {
-				lines = append(lines, "Antes de relanzar al agente, una persona corre en su terminal: bflow freeze --allow "+f)
+				lines = append(lines, cfg.t("flow.gate_decision_allow_instruction", f))
 			}
 			opt.Description = strings.Join(lines, "\n")
 			n.Options = append(n.Options, opt)
 		}
-		n.Options = append(n.Options, output.Option{ID: "manual", Label: "La hace la sesión principal (lanzar otro agente o verificar a mano), no el agente", NeedsNote: true,
+		n.Options = append(n.Options, output.Option{ID: "manual", Label: cfg.t("flow.option_manual_decision"), NeedsNote: true,
 			Command: cmd("approve", id, "--gate", "decision", "--manual", `--note "<qué hacer>"`)})
-		n.Options = append(n.Options, output.Option{ID: "other", Label: "Otra decisión", NeedsNote: true,
+		n.Options = append(n.Options, output.Option{ID: "other", Label: cfg.t("flow.option_other_decision"), NeedsNote: true,
 			Command: cmd("approve", id, "--gate", "decision", `--note "<decisión>"`)})
 		for _, p := range decisionTargets(cfg, s.Lane, s.Phase) {
-			label := "Rehacer el contrato (al aceptarlo se vuelven a congelar las pruebas)"
+			label := cfg.t("flow.option_contract_redo")
 			if p == Spec {
-				label = "Volver a spec"
+				label = cfg.t("flow.option_back_to_spec")
 			}
 			n.Options = append(n.Options, rejectOpt(id, GateDecision, string(p), label, p))
 		}
 	case GatePause:
-		n.Question = "La implementación terminó con el check en verde. ¿Lanzar la revisión de calidad?"
+		n.Question = cfg.t("flow.gate_pause_question")
 		n.Options = []output.Option{
-			approveOpt(id, g.Name, "Lanzar revisión"),
-			rejectOpt(id, g.Name, "fix", "Volver a implementar", ""),
+			approveOpt(id, g.Name, cfg.t("flow.option_launch_review")),
+			rejectOpt(id, g.Name, "fix", cfg.t("flow.option_back_to_implement"), ""),
 		}
 	case GateRounds:
-		n.Question = fmt.Sprintf("La compuerta de calidad rechazó %d rondas. ¿Qué hacemos?", s.Round)
+		n.Question = cfg.t("flow.gate_rounds_question", s.Round)
 		n.Options = []output.Option{
-			{ID: "split", Label: "Dividir la feature", Command: cmd("block", id, `--reason "dividir la feature"`)},
+			{ID: "split", Label: cfg.t("flow.option_split_feature"), Command: cmd("block", id, `--reason "dividir la feature"`)},
 		}
 		if cfg.has(s.Lane, Spec) {
-			n.Options = append(n.Options, rejectOpt(id, g.Name, "spec", "Volver a spec", ""))
+			n.Options = append(n.Options, rejectOpt(id, g.Name, "spec", cfg.t("flow.option_back_to_spec"), ""))
 		}
-		n.Options = append(n.Options, approveOpt(id, g.Name, "Una ronda más"))
+		n.Options = append(n.Options, approveOpt(id, g.Name, cfg.t("flow.option_one_more_round")))
 	case GateRepro:
-		n.Question = fmt.Sprintf("%s pide cerrar el hotfix sin prueba de reproducción: %s. ¿Lo aceptas?", g.Agent, g.Note)
+		n.Question = cfg.t("flow.gate_repro_question", g.Agent, g.Note)
 		n.Options = []output.Option{
-			approveOpt(id, g.Name, "Aceptar sin prueba"),
-			rejectOpt(id, g.Name, "test", "Pedir la prueba de reproducción", ""),
+			approveOpt(id, g.Name, cfg.t("flow.option_accept_no_test")),
+			rejectOpt(id, g.Name, "test", cfg.t("flow.option_request_repro_test"), ""),
 		}
 	case GateQuestions:
 		n.Skill = "walkthrough"
 		n.Show = []string{cmd("show", id, "questions")}
-		n.Question = "Antes de ver el código: ¿qué esperas que haga el cambio en estos casos? Tus respuestas se comparan después con lo que hace el código."
+		n.Question = cfg.t("flow.gate_questions_question")
 		n.Options = []output.Option{
-			{ID: "answer", Label: "Ya respondí", NeedsNote: true, Command: cmd("approve", id, "--gate", string(g.Name), `--note "<respuestas>"`)},
-			approveOpt(id, g.Name, "Saltar las preguntas"),
+			{ID: "answer", Label: cfg.t("flow.option_already_answered"), NeedsNote: true, Command: cmd("approve", id, "--gate", string(g.Name), `--note "<respuestas>"`)},
+			approveOpt(id, g.Name, cfg.t("flow.option_skip_questions")),
 		}
 	case GateWalkthrough:
 		n.Skill = "walkthrough"
 		n.Show = []string{cmd("show", id, "review-map")}
-		n.Question = "Recorre el diff con el review-map. ¿Apruebas el PR?"
+		n.Question = cfg.t("flow.gate_walkthrough_question")
 		n.Options = []output.Option{
-			approveOpt(id, g.Name, "Aprobar y abrir PR"),
-			rejectOpt(id, g.Name, "fix", "No me convence (volver a implementar)", ""),
+			approveOpt(id, g.Name, cfg.t("flow.option_approve_and_open_pr")),
+			rejectOpt(id, g.Name, "fix", cfg.t("flow.option_not_convinced"), ""),
 		}
 		if cfg.has(s.Lane, Spec) {
-			n.Options = append(n.Options, rejectOpt(id, g.Name, "spec", "Volver a spec", Spec))
+			n.Options = append(n.Options, rejectOpt(id, g.Name, "spec", cfg.t("flow.option_back_to_spec"), Spec))
 		}
 	}
 	return n
@@ -256,7 +261,7 @@ func spawnNext(cfg Config, s State) output.Next {
 		}
 	}
 	if len(pending) == 0 {
-		return output.Next{Action: output.ActionDone, Reason: "sin trabajo pendiente en " + string(s.Phase)}
+		return output.Next{Action: output.ActionDone, Reason: cfg.t("flow.no_work_pending_phase", string(s.Phase))}
 	}
 	parallel := s.Phase == Quality
 	if !parallel {

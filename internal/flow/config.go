@@ -5,6 +5,8 @@ import (
 	"path"
 	"slices"
 	"strings"
+
+	"innobytes.tech/bflow/internal/i18n"
 )
 
 // Config es lo que el núcleo necesita saber del proyecto.
@@ -36,6 +38,15 @@ type Config struct {
 	// Budget: tokens nuevos presupuestados por fase (GH-16); fase ausente =
 	// sin presupuesto.
 	Budget map[Phase]int64
+	// Loc: localizador de mensajes para preguntas, opciones y descripciones.
+	Loc *i18n.Localizer
+}
+
+func (c Config) t(key string, args ...any) string {
+	if c.Loc != nil {
+		return c.Loc.T(key, args...)
+	}
+	return i18n.T(key, args...)
 }
 
 // BudgetPhases son las fases que aceptan flow.budget en bflow.yaml.

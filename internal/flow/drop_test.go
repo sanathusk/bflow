@@ -96,7 +96,7 @@ func TestDroppedRejectsEvents(t *testing.T) {
 
 func TestNextForDropped(t *testing.T) {
 	n := NextFor(testConfig(), State{ID: "T-1", Phase: Dropped})
-	if n.Action != "done" || n.Reason != "tarea retirada" {
+	if n.Action != "done" || (n.Reason != "task dropped" && n.Reason != "tarea retirada") {
 		t.Errorf("next: %+v", n)
 	}
 }
@@ -139,7 +139,7 @@ func TestSplitGateShowsBrief(t *testing.T) {
 	if len(n.Show) != 1 || n.Show[0] != "bflow show T-1 brief" {
 		t.Errorf("show: %v", n.Show)
 	}
-	if len(n.Options) == 0 || n.Options[0].ID != "approve" || n.Options[0].Label != "Dividir: crear las hijas y retirar T-1" {
+	if len(n.Options) == 0 || n.Options[0].ID != "approve" || (n.Options[0].Label != "Split: create child tasks and drop T-1" && n.Options[0].Label != "Dividir: crear las hijas y retirar T-1") {
 		t.Errorf("opciones: %+v", n.Options)
 	}
 	if !strings.Contains(n.Options[0].Command, "approve T-1 --gate split") {

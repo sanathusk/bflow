@@ -19,6 +19,7 @@ import (
 	"innobytes.tech/bflow/internal/check"
 	"innobytes.tech/bflow/internal/config"
 	"innobytes.tech/bflow/internal/flow"
+	"innobytes.tech/bflow/internal/i18n"
 	"innobytes.tech/bflow/internal/output"
 	"innobytes.tech/bflow/internal/store"
 	"innobytes.tech/bflow/internal/tracker"
@@ -52,6 +53,7 @@ type Engine struct {
 	Contract ContractChecker // nil: el contrato pasa por la gate contract
 	Now      func() time.Time
 	User     string
+	Loc      *i18n.Localizer
 }
 
 // Outcome es el resultado de un comando de flujo.
@@ -73,6 +75,7 @@ type Outcome struct {
 func (e *Engine) flowCfg() flow.Config {
 	fc := e.Cfg.Flow.Core()
 	fc.ContractGate = !e.contractValidable()
+	fc.Loc = e.Loc
 	return fc
 }
 

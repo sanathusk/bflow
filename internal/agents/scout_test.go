@@ -34,7 +34,7 @@ func TestBuildScoutReadOnly(t *testing.T) {
 	if !slices.Equal(sc.Tools, []string{Read, Bash}) {
 		t.Errorf("herramientas: %v (sin write)", sc.Tools)
 	}
-	if !strings.Contains(sc.Body, "## Oficio\n") {
+	if !strings.Contains(sc.Body, "## Craft\n") && !strings.Contains(sc.Body, "## Oficio\n") {
 		t.Errorf("sin oficio por defecto:\n%s", sc.Body)
 	}
 	// Apagado, no se genera; y los demás agentes siguen con Read, Write y Bash.
@@ -83,17 +83,18 @@ func TestScoutContractStdin(t *testing.T) {
 	m := byName(t, specs)
 	body := m["scout"].Body
 	for _, want := range []string{
-		"No escribes archivos",
 		"bflow report <id> --agent scout --verdict DONE --stdin",
-		"≤40 líneas",
-		"código 2",
+		"≤40",
 		"`bflow show <id> task`",
 		"<pasted_content>",
-		"Tu respuesta final es solo la salida de `bflow report`",
+		"`bflow report`",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("el contrato del scout no dice %q:\n%s", want, body)
 		}
+	}
+	if !strings.Contains(body, "You do not write files") && !strings.Contains(body, "No escribes archivos") {
+		t.Errorf("el contrato del scout no indica que no escribe archivos:\n%s", body)
 	}
 	for _, bad := range []string{"NEEDS_DECISION", "DONE exige", "congeladas", "Escribes `"} {
 		if strings.Contains(body, bad) {

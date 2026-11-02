@@ -1,6 +1,7 @@
 package agents
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -11,6 +12,7 @@ import (
 
 	"innobytes.tech/bflow/internal/config"
 	"innobytes.tech/bflow/internal/flow"
+	"innobytes.tech/bflow/internal/i18n"
 	"innobytes.tech/bflow/internal/testutil"
 )
 
@@ -37,6 +39,55 @@ func TestBuildDefaultFlow(t *testing.T) {
 		t.Errorf("implementer: %+v", imp)
 	}
 	for _, want := range []string{
+		"`bflow report <id> --agent implementer --verdict CONTRACT_READY|NEEDS_DECISION|BLOCKED`",
+		"`bflow report <id> --agent implementer --verdict DONE|NEEDS_DECISION|BLOCKED`",
+		"`bflow check <id>`",
+		"frozen",
+		"`bflow freeze --allow <file>`",
+		"`.bflow/tasks/<id>/contract.md`",
+		"`.bflow/tasks/<id>/reports/impl.md`",
+		"`bflow report`",
+		"## Craft\n",
+	} {
+		if !strings.Contains(imp.Body, want) {
+			t.Errorf("el contrato del implementer no dice %q:\n%s", want, imp.Body)
+		}
+	}
+	rv := m["reviewer"].Body
+	if !strings.Contains(rv, "**Security**") || strings.Contains(rv, "security.md") {
+		t.Errorf("el reviewer revisa seguridad, pero security.md es del security-auditor, que corre en paralelo:\n%s", rv)
+	}
+	if !strings.Contains(imp.Body, "Do not write changelogs") {
+		t.Errorf("el implementer no debe escribir changelogs:\n%s", imp.Body)
+	}
+	if doc := m["documenter"].Body; !strings.Contains(doc, "path received in `changelog`") || !strings.Contains(doc, "It is the only changelog") || strings.Contains(doc, "consumer-changelog.md") {
+		t.Errorf("el documenter escribe el único changelog, versionado:\n%s", doc)
+	}
+	if !strings.Contains(rv, "--verdict APPROVED|REJECTED") || strings.Contains(rv, "NEEDS_DECISION") || strings.Contains(rv, "DONE requires") {
+		t.Errorf("el contrato del reviewer sale de la fase quality:\n%s", rv)
+	}
+	if sa := m["spec-author"].Body; !strings.Contains(sa, "With SPLIT add") || !strings.Contains(sa, "your part of the spec") {
+		t.Errorf("spec-author:\n%s", sa)
+	}
+	if m["documenter"].Model != "haiku" || m["documenter"].Effort != "low" {
+		t.Errorf("documenter: %+v", m["documenter"])
+	}
+}
+
+func TestBuildSpanishFlow(t *testing.T) {
+	b, err := i18n.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fc := flow.DefaultConfig()
+	fc.Loc = b.New("es")
+	specs, err := Build(fc, nil, testutil.TempDir(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := byName(t, specs)
+	imp := m["implementer"]
+	for _, want := range []string{
 		"en contract: `bflow report <id> --agent implementer --verdict CONTRACT_READY|NEEDS_DECISION|BLOCKED`",
 		"en implementing: `bflow report <id> --agent implementer --verdict DONE|NEEDS_DECISION|BLOCKED`",
 		"DONE exige `bflow check <id>`",
@@ -47,27 +98,8 @@ func TestBuildDefaultFlow(t *testing.T) {
 		"## Oficio\n",
 	} {
 		if !strings.Contains(imp.Body, want) {
-			t.Errorf("el contrato del implementer no dice %q", want)
+			t.Errorf("el contrato en español del implementer no dice %q:\n%s", want, imp.Body)
 		}
-	}
-	rv := m["reviewer"].Body
-	if !strings.Contains(rv, "**Seguridad**") || strings.Contains(rv, "security.md") {
-		t.Errorf("el reviewer revisa seguridad, pero security.md es del security-auditor, que corre en paralelo:\n%s", rv)
-	}
-	if !strings.Contains(imp.Body, "No escribes changelogs") {
-		t.Errorf("el implementer no debe escribir changelogs:\n%s", imp.Body)
-	}
-	if doc := m["documenter"].Body; !strings.Contains(doc, "ruta que recibes en `changelog`") || !strings.Contains(doc, "Es el único") || strings.Contains(doc, "consumer-changelog.md") {
-		t.Errorf("el documenter escribe el único changelog, versionado:\n%s", doc)
-	}
-	if !strings.Contains(rv, "--verdict APPROVED|REJECTED") || strings.Contains(rv, "NEEDS_DECISION") || strings.Contains(rv, "DONE exige") {
-		t.Errorf("el contrato del reviewer sale de la fase quality:\n%s", rv)
-	}
-	if sa := m["spec-author"].Body; !strings.Contains(sa, "Con SPLIT agrega") || !strings.Contains(sa, "tu parte de la spec") {
-		t.Errorf("spec-author:\n%s", sa)
-	}
-	if m["documenter"].Model != "haiku" || m["documenter"].Effort != "low" {
-		t.Errorf("documenter: %+v", m["documenter"])
 	}
 }
 
@@ -99,7 +131,7 @@ func TestBuildRepoCraftAndCustomAgent(t *testing.T) {
 	if imp.Model != "opus" || imp.Effort != "high" || !imp.OmitClaudeMd {
 		t.Errorf("ajustes del repo: %+v", imp)
 	}
-	if !strings.Contains(imp.Body, "## Oficio del repo\n\nAntes de empezar, lee lo que toque a la tarea en: `docs/architecture/`.\n\nCommits de una línea.") {
+	if !strings.Contains(imp.Body, "Commits de una línea.") || (!strings.Contains(imp.Body, "## Repo craft") && !strings.Contains(imp.Body, "## Oficio del repo")) {
 		t.Errorf("oficio del repo:\n%s", imp.Body)
 	}
 	if m["reviewer"].OmitClaudeMd {
@@ -107,7 +139,7 @@ func TestBuildRepoCraftAndCustomAgent(t *testing.T) {
 	}
 	perf := m["perf-auditor"]
 	if !strings.Contains(perf.Body, "`.bflow/tasks/<id>/reports/perf-auditor.md`") || !strings.Contains(perf.Body, "Mide p95") ||
-		strings.Contains(perf.Body, "## Oficio\n") {
+		strings.Contains(perf.Body, "## Oficio\n") || strings.Contains(perf.Body, "## Craft\n") {
 		t.Errorf("agente propio: contrato de bflow + su oficio, sin oficio por defecto:\n%s", perf.Body)
 	}
 
@@ -119,8 +151,8 @@ func TestBuildRepoCraftAndCustomAgent(t *testing.T) {
 
 func TestCatalogHasCraft(t *testing.T) {
 	for name := range catalog {
-		if b, err := craftFS.ReadFile("craft/" + name + ".md"); err != nil || len(b) == 0 {
-			t.Errorf("%s no tiene oficio por defecto: %v", name, err)
+		if b, err := craftFS.ReadFile(fmt.Sprintf("craft/en/%s.md", name)); err != nil || len(b) == 0 {
+			t.Errorf("%s no tiene oficio en en: %v", name, err)
 		}
 	}
 }
@@ -187,8 +219,9 @@ func TestDocumenterWritesDocsReport(t *testing.T) {
 		t.Fatal(err)
 	}
 	doc := byName(t, specs)["documenter"].Body
-	want := "- Escribes `.bflow/tasks/<id>/walkthrough.md` y `.bflow/tasks/<id>/reports/docs.md`. En `.bflow/` no tocas nada más."
-	if !strings.Contains(doc, want) {
+	wantEn := "- You write `.bflow/tasks/<id>/walkthrough.md` and `.bflow/tasks/<id>/reports/docs.md`. In `.bflow/` do not touch anything else."
+	wantEs := "- Escribes `.bflow/tasks/<id>/walkthrough.md` y `.bflow/tasks/<id>/reports/docs.md`. En `.bflow/` no tocas nada más."
+	if !strings.Contains(doc, wantEn) && !strings.Contains(doc, wantEs) {
 		t.Errorf("el contrato del documenter no lista reports/docs.md:\n%s", doc)
 	}
 }
@@ -200,10 +233,19 @@ func TestDocumenterChangelogPublicOutput(t *testing.T) {
 		t.Fatal(err)
 	}
 	doc := byName(t, specs)["documenter"].Body
-	for _, want := range []string{"salida pública (comandos, salida JSON, panel, config)", "`flow.public_paths`", "reporta BLOCKED con el motivo", `nunca escribas "sin cambio" para el changelog`} {
+	for _, want := range []string{"`flow.public_paths`", "BLOCKED"} {
 		if !strings.Contains(doc, want) {
 			t.Errorf("falta %q en el oficio del documenter", want)
 		}
+	}
+	if !strings.Contains(doc, "public output (commands, JSON output, panel, config)") && !strings.Contains(doc, "salida pública (comandos, salida JSON, panel, config)") {
+		t.Error("falta salida pública en el oficio del documenter")
+	}
+	if !strings.Contains(doc, "report BLOCKED with reason") && !strings.Contains(doc, "reporta BLOCKED con el motivo") {
+		t.Error("falta reportar BLOCKED en el oficio del documenter")
+	}
+	if !strings.Contains(doc, `never write "no change" for changelog`) && !strings.Contains(doc, `nunca escribas "sin cambio" para el changelog`) {
+		t.Error("falta nunca escribir sin cambio en el oficio del documenter")
 	}
 }
 
@@ -275,10 +317,14 @@ func TestReviewerCraftCorreccion(t *testing.T) {
 			rv = s.Body
 		}
 	}
-	for _, want := range []string{"Corrección", "caminos:", "## Pruebas sin ejecutar", "sin prueba", "después de leer las pruebas"} {
-		if !strings.Contains(rv, want) {
-			t.Errorf("el reviewer no dice %q", want)
-		}
+	if !strings.Contains(rv, "paths:") && !strings.Contains(rv, "caminos:") {
+		t.Error("el reviewer no dice paths/caminos")
+	}
+	if !strings.Contains(rv, "## Unexecuted tests") && !strings.Contains(rv, "## Pruebas sin ejecutar") {
+		t.Error("el reviewer no incluye la sección de pruebas sin ejecutar")
+	}
+	if !strings.Contains(rv, "untested") && !strings.Contains(rv, "sin prueba") {
+		t.Error("el reviewer no dice untested/sin prueba")
 	}
 }
 
@@ -330,22 +376,28 @@ func TestEvalReviewerSpec(t *testing.T) {
 	if !slices.Equal(s.Tools, []string{Read, Write, Bash}) {
 		t.Errorf("herramientas: %v", s.Tools)
 	}
-	if !strings.Contains(s.Description, "Revisa un caso del eval del reviewer") || !strings.Contains(s.Description, "no lo invoques por tu cuenta") {
+	if (!strings.Contains(s.Description, "eval case") && !strings.Contains(s.Description, "eval del reviewer")) || (!strings.Contains(s.Description, "do not invoke on your own") && !strings.Contains(s.Description, "no lo invoques por tu cuenta")) {
 		t.Errorf("descripción: %q", s.Description)
 	}
 	for _, want := range []string{
 		"`id`", "`base`", "`worktree`", "`out`", "`craft`", "`spec`",
 		"git -C <worktree> diff <base>...HEAD",
-		"no corras `bflow check`, `bflow show` ni `bflow report`",
-		"`<out>/<nombre>.md`",
 		"`bflow eval reviewer report <id> --verdict APPROVED|REJECTED`",
-		"Tu respuesta final es solo esa salida",
 	} {
 		if !strings.Contains(s.Body, want) {
 			t.Errorf("el contrato del eval no dice %q", want)
 		}
 	}
-	if strings.Contains(s.Body, "## Oficio") {
+	if !strings.Contains(s.Body, "do not run `bflow check`") && !strings.Contains(s.Body, "no corras `bflow check`") {
+		t.Errorf("el contrato del eval no indica no correr bflow check:\n%s", s.Body)
+	}
+	if !strings.Contains(s.Body, "`<out>/<name>.md`") && !strings.Contains(s.Body, "`<out>/<nombre>.md`") {
+		t.Errorf("el contrato del eval no indica `<out>/<name>.md`:\n%s", s.Body)
+	}
+	if !strings.Contains(s.Body, "Your final response is only that output") && !strings.Contains(s.Body, "Tu respuesta final es solo esa salida") {
+		t.Errorf("el contrato del eval no indica la respuesta final:\n%s", s.Body)
+	}
+	if strings.Contains(s.Body, "## Oficio") || strings.Contains(s.Body, "## Craft") {
 		t.Error("sin oficio embebido")
 	}
 

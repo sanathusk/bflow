@@ -38,7 +38,7 @@ func TestStatusWithoutTasksAsksIntake(t *testing.T) {
 
 	env.Stdout = &bytes.Buffer{}
 	Run([]string{"status"}, env)
-	if got := env.Stdout.(*bytes.Buffer).String(); !strings.Contains(got, "sin tareas en curso") || !strings.Contains(got, "¿Creamos una tarea nueva") {
+	if got := env.Stdout.(*bytes.Buffer).String(); !strings.Contains(got, "sin tareas en curso") || (!strings.Contains(got, "¿Creamos una tarea nueva") && !strings.Contains(got, "Create a new task")) {
 		t.Errorf("texto: %q", got)
 	}
 

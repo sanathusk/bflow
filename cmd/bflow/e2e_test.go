@@ -25,7 +25,7 @@ func TestMain(m *testing.M) {
 	if runtime.GOOS == "windows" {
 		binary += ".exe"
 	}
-	if out, err := exec.Command("go", "build", "-o", binary, ".").CombinedOutput(); err != nil {
+	if out, err := exec.Command("go", "build", "-buildvcs=false", "-o", binary, ".").CombinedOutput(); err != nil {
 		fmt.Fprintf(os.Stderr, "no se pudo compilar bflow: %v\n%s", err, out)
 		os.Exit(1)
 	}

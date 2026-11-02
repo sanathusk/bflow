@@ -132,6 +132,7 @@ func runGuard(c *Ctx) output.Envelope {
 	// Las acciones se evalúan en orden: la primera rechazada da el registro y el motivo.
 	for _, a := range acts {
 		gc := guardContext(cfg)
+		gc.Loc = c.Env.Loc
 		if needsTask(a, cfg) && c.Build != nil {
 			if e, err := c.Build(cfg.Root); err == nil {
 				if id, err := e.Active(context.Background()); err == nil {
@@ -554,7 +555,7 @@ func runSessionStart(c *Ctx) output.Envelope {
 	var next *output.Next
 	if id, err := e.Active(ctx); err == nil {
 		if v, err := e.Status(ctx, id); err == nil {
-			brief := viewEnvelope(v, true)
+			brief := viewEnvelope(v, true, c.Env.Loc)
 			lines = append(lines, brief.Text)
 			data["task"] = v.ID
 			n := v.Next

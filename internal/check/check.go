@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"innobytes.tech/bflow/internal/config"
+	"innobytes.tech/bflow/internal/i18n"
 )
 
 // GitReader es lo que check necesita de git.
@@ -482,8 +483,11 @@ func (res Result) Markdown() string {
 	return b.String()
 }
 
-// Summary es una línea para el agente; el detalle queda en check.md.
-func (res Result) Summary() string {
+// SummaryLoc es una línea para el agente localizada; el detalle queda en check.md.
+func (res Result) SummaryLoc(loc *i18n.Localizer) string {
+	if loc == nil {
+		loc = i18n.DefaultLocalizer()
+	}
 	var failed, skipped []string
 	for _, s := range res.Steps {
 		switch s.Status {
@@ -497,17 +501,22 @@ func (res Result) Summary() string {
 			skipped = append(skipped, s.Name)
 		}
 	}
-	line := fmt.Sprintf("check %s · %d pasos", res.Result, len(res.Steps))
+	line := loc.T("check.summary_steps", res.Result, len(res.Steps))
 	if len(failed) > 0 {
-		line += " · fallaron: " + strings.Join(failed, ", ")
+		line += loc.T("check.failed_prefix", strings.Join(failed, ", "))
 	}
 	if len(res.Degraded) > 0 {
-		line += fmt.Sprintf(" · %d degradado(s)", len(res.Degraded))
+		line += loc.T("check.degraded", len(res.Degraded))
 	}
 	if len(res.Warnings) > 0 {
-		line += fmt.Sprintf(" · %d aviso(s)", len(res.Warnings))
+		line += loc.T("check.warnings", len(res.Warnings))
 	}
 	return line
+}
+
+// Summary es una línea para el agente; el detalle queda en check.md.
+func (res Result) Summary() string {
+	return res.SummaryLoc(nil)
 }
 
 func matchesAny(patterns []string, file string) bool {

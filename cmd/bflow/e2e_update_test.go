@@ -145,7 +145,7 @@ func runCopy(t *testing.T, src, api string, args ...string) (exe string, out str
 func TestUpdate(t *testing.T) {
 	srv := releaseServer(t, false)
 	old := buildAs(t, "-ldflags", "-X main.version=v0.0.1")
-	if _, out, code := runCopy(t, old, srv.URL, "update", "--check"); code != 0 || !strings.Contains(out, "hay una versión nueva: v9.9.9 (tienes v0.0.1)") {
+	if _, out, code := runCopy(t, old, srv.URL, "update", "--check"); code != 0 || (!strings.Contains(out, "hay una versión nueva: v9.9.9 (tienes v0.0.1)") && !strings.Contains(out, "there is a new version: v9.9.9 (you have v0.0.1)")) {
 		t.Errorf("--check: %d %s", code, out)
 	}
 	exe, out, code := runCopy(t, old, srv.URL, "update")
@@ -158,7 +158,7 @@ func TestUpdate(t *testing.T) {
 
 	// Sin versión publicada (compilado sin datos de git) no se compara: pide --force.
 	dev := buildAs(t, "-buildvcs=false")
-	if _, out, code := runCopy(t, dev, srv.URL, "update"); code != 0 || !strings.Contains(out, "no viene de una versión publicada") {
+	if _, out, code := runCopy(t, dev, srv.URL, "update"); code != 0 || (!strings.Contains(out, "no viene de una versión publicada") && !strings.Contains(out, "does not come from a published release")) {
 		t.Errorf("dev: %d %s", code, out)
 	}
 	if exe, out, code := runCopy(t, dev, srv.URL, "update", "--force"); code != 0 || !strings.Contains(out, "→ v9.9.9") {
@@ -181,20 +181,20 @@ func TestUpdate(t *testing.T) {
 func TestUpdatePrerelease(t *testing.T) {
 	pre := func(tag string) rel { return rel{Tag: tag, Prerelease: true} }
 	cases := []struct {
-		name, version, want string
-		rels                []rel
+		name, version, wantEs, wantEn string
+		rels                          []rel
 	}{
-		{"solo prereleases, binario rc.8", "v0.1.0-rc.8", "hay una versión nueva: v0.1.0-rc.9 (tienes v0.1.0-rc.8)", []rel{pre("v0.1.0-rc.9")}},
-		{"rc.10 supera a rc.9", "v0.1.0-rc.9", "hay una versión nueva: v0.1.0-rc.10 (tienes v0.1.0-rc.9)", []rel{pre("v0.1.0-rc.9"), pre("v0.1.0-rc.10")}},
-		{"rc.9 es la última", "v0.1.0-rc.9", "ya tienes la última versión", []rel{pre("v0.1.0-rc.9"), {Tag: "v0.1.0-rc.10", Prerelease: true, Draft: true}}},
-		{"estable sin estable publicada no recibe prereleases", "v0.1.0", "ya tienes la última versión (v0.1.0)", []rel{pre("v0.2.0-rc.1")}},
-		{"estable no recibe prereleases", "v0.1.0", "ya tienes la última versión (v0.1.0)", []rel{pre("v0.2.0-rc.1"), {Tag: "v0.1.0"}}},
+		{"solo prereleases, binario rc.8", "v0.1.0-rc.8", "hay una versión nueva: v0.1.0-rc.9 (tienes v0.1.0-rc.8)", "there is a new version: v0.1.0-rc.9 (you have v0.1.0-rc.8)", []rel{pre("v0.1.0-rc.9")}},
+		{"rc.10 supera a rc.9", "v0.1.0-rc.9", "hay una versión nueva: v0.1.0-rc.10 (tienes v0.1.0-rc.9)", "there is a new version: v0.1.0-rc.10 (you have v0.1.0-rc.9)", []rel{pre("v0.1.0-rc.9"), pre("v0.1.0-rc.10")}},
+		{"rc.9 es la última", "v0.1.0-rc.9", "ya tienes la última versión", "you already have the latest version", []rel{pre("v0.1.0-rc.9"), {Tag: "v0.1.0-rc.10", Prerelease: true, Draft: true}}},
+		{"estable sin estable publicada no recibe prereleases", "v0.1.0", "ya tienes la última versión (v0.1.0)", "you already have the latest version (v0.1.0)", []rel{pre("v0.2.0-rc.1")}},
+		{"estable no recibe prereleases", "v0.1.0", "ya tienes la última versión (v0.1.0)", "you already have the latest version (v0.1.0)", []rel{pre("v0.2.0-rc.1"), {Tag: "v0.1.0"}}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			srv := releaseServerOf(t, false, c.rels...)
 			exe := buildAs(t, "-ldflags", "-X main.version="+c.version)
-			if _, out, code := runCopy(t, exe, srv.URL, "update", "--check"); code != 0 || !strings.Contains(out, c.want) {
+			if _, out, code := runCopy(t, exe, srv.URL, "update", "--check"); code != 0 || (!strings.Contains(out, c.wantEs) && !strings.Contains(out, c.wantEn)) {
 				t.Errorf("%d %s", code, out)
 			}
 		})
@@ -202,7 +202,7 @@ func TestUpdatePrerelease(t *testing.T) {
 	t.Run("binario sin versión publicada con solo prereleases", func(t *testing.T) {
 		srv := releaseServerOf(t, false, pre("v0.1.0-rc.9"))
 		dev := buildAs(t, "-buildvcs=false")
-		if _, out, code := runCopy(t, dev, srv.URL, "update"); code != 0 || !strings.Contains(out, "no viene de una versión publicada") || !strings.Contains(out, "v0.1.0-rc.9") {
+		if _, out, code := runCopy(t, dev, srv.URL, "update"); code != 0 || (!strings.Contains(out, "no viene de una versión publicada") && !strings.Contains(out, "does not come from a published release")) || !strings.Contains(out, "v0.1.0-rc.9") {
 			t.Errorf("%d %s", code, out)
 		}
 	})

@@ -15,6 +15,7 @@ import (
 	"unicode"
 
 	"innobytes.tech/bflow/internal/flow"
+	"innobytes.tech/bflow/internal/i18n"
 )
 
 // Tipos de herramienta, ya traducidos por el adaptador del agente.
@@ -71,6 +72,7 @@ type Context struct {
 
 	Phase  flow.Phase // fase de la tarea activa ("" si no hay)
 	Frozen []string   // pruebas congeladas al aprobar el contrato
+	Loc    *i18n.Localizer
 }
 
 // Decision es el resultado.

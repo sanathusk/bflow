@@ -10,6 +10,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+
+	"innobytes.tech/bflow/internal/i18n"
 )
 
 // Códigos de salida. Los hooks de las herramientas de agente dependen de ellos
@@ -85,6 +87,19 @@ func OK(code string, data map[string]any, next *Next) Envelope {
 	return Envelope{OK: true, Code: code, Data: data, Next: next, exit: ExitOK}
 }
 
+// FailLoc construye una respuesta de error (exit 1) localizada con loc.
+func FailLoc(loc *i18n.Localizer, code string, err error) Envelope {
+	msg := ""
+	if err != nil {
+		msg = err.Error()
+	}
+	prefix := "ERROR: "
+	if loc != nil {
+		prefix = loc.T("output.error_prefix")
+	}
+	return Envelope{Code: code, Data: map[string]any{"error": msg}, Text: prefix + msg, exit: ExitError}
+}
+
 // Fail construye una respuesta de error (exit 1).
 func Fail(code string, err error) Envelope {
 	msg := ""
@@ -92,6 +107,15 @@ func Fail(code string, err error) Envelope {
 		msg = err.Error()
 	}
 	return Envelope{Code: code, Data: map[string]any{"error": msg}, Text: "ERROR: " + msg, exit: ExitError}
+}
+
+// RejectedLoc construye un rechazo o bloqueo (exit 2) localizado con loc.
+func RejectedLoc(loc *i18n.Localizer, code, reason string) Envelope {
+	prefix := "REJECTED: "
+	if loc != nil {
+		prefix = loc.T("output.rejected_prefix")
+	}
+	return Envelope{Code: code, Data: map[string]any{"reason": reason}, Text: prefix + reason, exit: ExitRejected}
 }
 
 // Rejected construye un rechazo o bloqueo (exit 2): la operación era válida

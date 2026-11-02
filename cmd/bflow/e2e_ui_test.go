@@ -40,7 +40,9 @@ func TestUINetwork(t *testing.T) {
 	}
 	defer func() { _ = cmd.Process.Kill() }()
 	line, _ := bufio.NewReader(out).ReadString('\n')
-	url := strings.Fields(strings.TrimPrefix(line, "bflow ui en "))[0]
+	line = strings.TrimPrefix(line, "bflow ui at ")
+	line = strings.TrimPrefix(line, "bflow ui en ")
+	url := strings.Fields(line)[0]
 
 	type row struct {
 		Key  string `json:"key"`

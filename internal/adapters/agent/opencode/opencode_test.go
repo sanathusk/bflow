@@ -259,7 +259,7 @@ func TestOpenCodeRenderedAgentsStablePrefix(t *testing.T) {
 			}
 		}
 		_, body := frontmatterOf(t, doc)
-		if !strings.HasPrefix(body, agents.GeneratedMark+"\n\n## Contrato con bflow") {
+		if !strings.HasPrefix(body, agents.GeneratedMark+"\n\n## Contract with bflow") && !strings.HasPrefix(body, agents.GeneratedMark+"\n\n## Contrato con bflow") {
 			t.Errorf("%s: el cuerpo empieza con la marca y el contrato: %q", path, body[:min(len(body), 80)])
 		}
 	}

@@ -92,9 +92,9 @@ func runCheck(c *Ctx) output.Envelope {
 			ok, detail = false, "comentarios narrativos: "+strings.Join(places, ", ")
 		}
 		env := output.OK("verified", map[string]any{"id": id, "ok": ok, "detail": detail}, nil)
-		env.Text = "VERIFY OK: " + detail
+		env.Text = envLoc(c.Env).T("check.verify_ok", detail)
 		if !ok {
-			env.OK, env.Code, env.Text = false, "not_verified", "VERIFY FAIL: "+detail
+			env.OK, env.Code, env.Text = false, "not_verified", envLoc(c.Env).T("check.verify_fail", detail)
 			env = env.WithExit(output.ExitError)
 		}
 		return env
@@ -136,7 +136,7 @@ func runCheck(c *Ctx) output.Envelope {
 	}
 	var failed []map[string]any
 	var b strings.Builder
-	b.WriteString(res.Summary())
+	b.WriteString(res.SummaryLoc(c.Env.Loc))
 	for _, s := range res.Steps {
 		if s.Status != "fail" {
 			continue
@@ -161,7 +161,7 @@ func runCheck(c *Ctx) output.Envelope {
 		b.WriteString("\n⚠ " + w)
 	}
 	if res.SHA == "DIRTY" && quick == "" {
-		b.WriteString("\n⚠ código sin commitear: commitea y vuelve a correr para que --verify pase")
+		b.WriteString("\n⚠ " + envLoc(c.Env).T("check.dirty_warning"))
 	}
 	if quick == "" && id != "" {
 		b.WriteString("\ndetalle: bflow show " + id + " check")

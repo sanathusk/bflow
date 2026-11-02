@@ -14,6 +14,7 @@ import (
 	"innobytes.tech/bflow/internal/config"
 	"innobytes.tech/bflow/internal/engine"
 	"innobytes.tech/bflow/internal/flow"
+	"innobytes.tech/bflow/internal/i18n"
 	"innobytes.tech/bflow/internal/output"
 )
 
@@ -30,7 +31,11 @@ func engineFor(c *Ctx) (*engine.Engine, error) {
 	if c.Build == nil {
 		return nil, errors.New("bflow se compiló sin adaptadores")
 	}
-	return c.Build(c.Dir)
+	e, err := c.Build(c.Dir)
+	if err == nil && e != nil && e.Loc != nil && c.Env != nil {
+		c.Env.Loc = e.Loc
+	}
+	return e, err
 }
 
 // resolveID toma el ID de los argumentos o, si no hay, la tarea activa.
@@ -51,7 +56,7 @@ func fail(err error) output.Envelope {
 	return output.Fail("error", err)
 }
 
-func outcomeEnvelope(o engine.Outcome) output.Envelope {
+func outcomeEnvelope(o engine.Outcome, loc *i18n.Localizer) output.Envelope {
 	data := map[string]any{"id": o.ID, "phase": o.Phase}
 	if o.Round > 0 {
 		data["round"] = o.Round
@@ -74,7 +79,7 @@ func outcomeEnvelope(o engine.Outcome) output.Envelope {
 	}
 	next := o.Next
 	env := output.OK(code, data, &next)
-	env.Text = renderOutcome(o)
+	env.Text = renderOutcome(o, loc)
 	return env
 }
 
@@ -94,7 +99,7 @@ func flowCommand(run func(ctx context.Context, e *engine.Engine, id string, c *C
 		if err != nil {
 			return fail(err)
 		}
-		return outcomeEnvelope(o)
+		return outcomeEnvelope(o, c.Env.Loc)
 	}
 }
 
@@ -168,7 +173,7 @@ func init() {
 				return env
 			}
 			afterStart(e, &o)
-			env := outcomeEnvelope(o)
+			env := outcomeEnvelope(o, c.Env.Loc)
 			env.Data["title"] = task.Title
 			return env
 		}})
@@ -306,7 +311,7 @@ func init() {
 			if err != nil {
 				return fail(err)
 			}
-			return outcomeEnvelope(o)
+			return outcomeEnvelope(o, c.Env.Loc)
 		}})
 
 	Register(&Command{Name: "unblock", Summary: "desbloquea la tarea y vuelve a su fase: unblock [ID] [--note t] [--no-changelog] (la nota llega al agente; --no-changelog exime del changelog)",
@@ -402,7 +407,7 @@ func init() {
 			}
 			next := view.Next
 			env := output.OK("created", map[string]any{"id": task.ID, "title": task.Title}, &next)
-			env.Text = fmt.Sprintf("%s creada · %s\n%s", task.ID, task.Title, strings.TrimRight(renderNext(next), "\n"))
+			env.Text = c.Env.Loc.T("render.task_created", task.ID, task.Title) + "\n" + strings.TrimRight(renderNext(next, c.Env.Loc), "\n")
 			return env
 		}})
 
@@ -461,7 +466,7 @@ func runStatus(c *Ctx) output.Envelope {
 		if err != nil {
 			return fail(err)
 		}
-		return viewEnvelope(v, brief)
+		return viewEnvelope(v, brief, c.Env.Loc)
 	}
 	views, err := e.Views(ctx)
 	if err != nil {
@@ -470,7 +475,7 @@ func runStatus(c *Ctx) output.Envelope {
 	if id, err := e.Active(ctx); err == nil {
 		for _, v := range views {
 			if v.ID == id {
-				return viewEnvelope(v, brief)
+				return viewEnvelope(v, brief, c.Env.Loc)
 			}
 		}
 	}
@@ -494,7 +499,7 @@ func runStatus(c *Ctx) output.Envelope {
 		env := output.OK("status_list", map[string]any{"tasks": views}, &next)
 		env.Text = text
 		if !brief {
-			env.Text += "\n" + strings.TrimRight(renderNext(next), "\n")
+			env.Text += "\n" + strings.TrimRight(renderNext(next, c.Env.Loc), "\n")
 		}
 		return env
 	}
@@ -503,7 +508,7 @@ func runStatus(c *Ctx) output.Envelope {
 	return env
 }
 
-func viewEnvelope(v engine.View, brief bool) output.Envelope {
+func viewEnvelope(v engine.View, brief bool, loc *i18n.Localizer) output.Envelope {
 	next := v.Next
 	env := output.OK("status", map[string]any{"task": v}, &next)
 	if brief {
@@ -525,7 +530,7 @@ func viewEnvelope(v engine.View, brief bool) output.Envelope {
 		env.Text = l + " (bflow status " + v.ID + " --json)"
 		return env
 	}
-	env.Text = renderView(v)
+	env.Text = renderView(v, loc)
 	return env
 }
 

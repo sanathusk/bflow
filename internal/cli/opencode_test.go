@@ -82,10 +82,13 @@ func TestRenderMultiTool(t *testing.T) {
 		t.Errorf("Claude sigue con el alias directo (R7):\n%s", cl)
 	}
 	oc := rendered(t, env, ".opencode/agents/bflow-implementer.md")
-	for _, w := range []string{"mode: subagent", "model: anthropic/claude-sonnet-4", "edit: allow", "bash: allow", "## Contrato con bflow"} {
+	for _, w := range []string{"mode: subagent", "model: anthropic/claude-sonnet-4", "edit: allow", "bash: allow"} {
 		if !strings.Contains(oc, w) {
 			t.Errorf("el agente de OpenCode no trae %q:\n%s", w, oc)
 		}
+	}
+	if !strings.Contains(oc, "## Contract with bflow") && !strings.Contains(oc, "## Contrato con bflow") {
+		t.Errorf("el agente de OpenCode no trae el contrato:\n%s", oc)
 	}
 	if doc := rendered(t, env, ".opencode/agents/bflow-documenter.md"); !strings.Contains(doc, "model: anthropic/claude-haiku-4") {
 		t.Errorf("el alias haiku se traduce:\n%s", doc)
@@ -413,7 +416,8 @@ func TestUpdateRefreshesIntegrations(t *testing.T) {
 		if in := integrations(t, d); in["claude"] != "failed" || in["opencode"] != "failed" || d["skill"] != "failed" {
 			t.Errorf("data: %v", d)
 		}
-		if !strings.Contains(text, "corre bflow install claude") || !strings.Contains(text, "corre bflow install opencode") {
+		if (!strings.Contains(text, "corre bflow install claude") && !strings.Contains(text, "run bflow install claude")) ||
+			(!strings.Contains(text, "corre bflow install opencode") && !strings.Contains(text, "run bflow install opencode")) {
 			t.Errorf("avisa cómo refrescar cada una: %q", text)
 		}
 		if b, _ := os.ReadFile(command); string(b) != "vieja" {
