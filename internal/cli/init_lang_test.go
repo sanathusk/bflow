@@ -87,4 +87,3 @@ func TestInitLanguage(t *testing.T) {
 		}
 	})
 }
-
