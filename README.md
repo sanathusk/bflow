@@ -1,122 +1,122 @@
 # Byteflow · `bflow`
 
-> 🌐 **Language / Idioma:** **Español** · [English](README.en.md)
+> 🌐 **Language / Idioma:** **English** · [Español](README.es.md)
 
-**Motor de flujo Spec-Driven Development para trabajar con agentes de IA.** Un solo binario en Go que lleva cada tarea de la idea al PR mergeado (discovery, spec, implementación, revisión, walkthrough; en el carril full, también un contrato de pruebas de aceptación que se congela antes del código), decide las transiciones, habla con tu tracker y con git, y le dice al agente exactamente qué hacer después, en pocas líneas de JSON.
+**Spec-Driven Development workflow engine for AI agents.** A single Go binary that takes each task from idea to merged PR (discovery, spec, implementation, review, walkthrough; in the full lane, also an acceptance test contract frozen before code), decides transitions, speaks to your tracker and git, and tells the agent exactly what to do next in a few lines of JSON.
 
-> Estado: **v0.1.0**, la primera versión publicada. Funciona de punta a punta con el tracker local, Plane y GitHub, y con Claude Code y OpenCode como agente. La API de comandos puede cambiar antes de la 1.0. Si lo vas a probar, empieza por [cómo probar y reportar](docs/es/como-probar-y-reportar.md).
+> Status: **v0.1.0**, the first published release. Works end-to-end with the local tracker, Plane, and GitHub, and with Claude Code and OpenCode as agents. The command API may change before 1.0. If you are going to test it, start with [how to test and report](docs/en/how-to-test-and-report.md).
 
 ---
 
-## Por qué existe
+## Why it exists
 
-Tenía un harness por proyecto y se desactualizaban entre sí; además, las features tardaban, había alucinaciones, los agentes no siempre seguían el harness y se generaba documentación redundante. En los dos repos que medí, el harness gastaba unos 7.000 tokens fijos por sesión y entre 73% y 80% de lo versionado era estado, no especificaciones. Hice bflow para mi equipo en Innobytes: gastar menos tokens y que todos resuelvan una feature igual con spec driven development, aunque la IA no sea determinista.
+I had a harness per project and they fell out of sync; features took long, hallucinations happened, agents did not always follow the harness, and redundant documentation accumulated. In the two repos I measured, the harness spent around 7,000 fixed tokens per session and 73% to 80% of what was committed was state, not specifications. I built bflow for my team at Innobytes: spend fewer tokens and have everyone solve features consistently with spec-driven development, even if AI is non-deterministic.
 
-Byteflow separa lo que **requiere criterio** (entender el problema, diseñar, programar, revisar), que hace el agente, de lo que es **determinista** (estado, transiciones, git, tracker, pruebas, reglas), que hace el CLI. El agente no tiene que recordar el proceso: pregunta a `bflow` qué sigue y lo hace. La historia completa y el rumbo: [Por qué y rumbo](docs/es/por-que-y-rumbo.md).
+Byteflow separates what **requires judgment** (understanding the problem, designing, coding, reviewing)—handled by the agent—from what is **deterministic** (state, transitions, git, tracker, tests, rules)—handled by the CLI. The agent does not need to remember the process: it asks `bflow` what is next and does it. Full background and roadmap: [Why and roadmap](docs/en/why-and-roadmap.md).
 
-## Para quién es (y para quién no)
+## Who it is for (and who it is not for)
 
-bflow es opinado a propósito: tiene un flujo definido y gates humanas fijas. Muestra una forma concreta de trabajar con agentes.
+bflow is opinionated on purpose: it has a defined flow and fixed human gates. It demonstrates a concrete way to work with agents.
 
-**Te sirve si:**
+**It works for you if:**
 
-- Desarrollas features con agentes de IA y quieres que las decisiones importantes (qué se construye, qué se mergea) las tome una persona, sin leer todo lo que el agente genera.
-- Trabajas con git y PRs, y con Claude Code u OpenCode como agente.
-- Quieres saber cuánto cuesta cada feature (tiempo, tokens, iteraciones) y dónde se atora.
+- You develop features with AI agents and want important decisions (what gets built, what gets merged) made by a person, without reading everything the agent outputs.
+- You work with git and PRs, and use Claude Code or OpenCode as your agent.
+- You want to know what each feature costs (time, tokens, iterations) and where it gets stuck.
 
-**No te sirve si:**
+**It is not for you if:**
 
-- Buscas que el agente trabaje solo de punta a punta, sin aprobaciones.
-- Tu flujo no pasa por ramas y PRs.
-- Usas otra herramienta de agente y necesitas todas las garantías: hoy solo Claude Code y OpenCode tienen adaptador (ver [qué garantiza](docs/es/conceptos.md#qué-garantiza-y-qué-no)).
+- You want the agent to work end-to-end on its own without approvals.
+- Your workflow does not use branches and PRs.
+- You use another agent tool and need full guarantees: today only Claude Code and OpenCode have adapters (see [what it guarantees](docs/en/concepts.md#what-it-guarantees-and-what-it-does-not)).
 
-## Instalar
+## Install
 
-Linux y macOS (en `~/.local/bin`):
+Linux and macOS (in `~/.local/bin`):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/innobytestech/bflow/main/install.sh | sh
 ```
 
-Windows (en `%LOCALAPPDATA%\Programs\bflow`):
+Windows (in `%LOCALAPPDATA%\Programs\bflow`):
 
 ```powershell
 irm https://raw.githubusercontent.com/innobytestech/bflow/main/install.ps1 | iex
 ```
 
-Los scripts verifican el SHA-256 del archivo antes de instalar. Versión fija, Go, actualizar y desinstalar: [Instalación](docs/es/instalacion.md).
+The scripts verify the SHA-256 of the archive before installing. Pinned version, Go, upgrade, and uninstall instructions: [Installation](docs/en/installation.md).
 
-## Inicio rápido
+## Quick start
 
 ```bash
-cd mi-repo
-bflow init                 # detecta stack, remoto, rama base y propone los pasos de check
-bflow doctor               # valida config, herramientas, conexiones y hooks
-bflow install claude       # o: bflow install opencode (skill o comando, y hooks)
+cd my-repo
+bflow init                 # detects stack, remote, base branch, and proposes check steps
+bflow doctor               # validates config, tools, connections, and hooks
+bflow install claude       # or: bflow install opencode (skill or command, and hooks)
 ```
 
-Sin `bflow.yaml`, bflow funciona con el tracker local y solo con git. Para recorrer una tarea:
+Without `bflow.yaml`, bflow runs with the local tracker and git only. To walk through a task:
 
 ```bash
-bflow new --lane light --title "Validación de RFC" --file idea.md   # crea la tarea y la arranca
-bflow report LOCAL-1 --agent spec-author --verdict READY    # lo corre el agente
+bflow new --lane light --title "RFC validation" --file idea.md       # creates the task and starts it
+bflow report LOCAL-1 --agent spec-author --verdict READY            # run by the agent
 bflow show LOCAL-1 brief
-bflow approve LOCAL-1                                        # crea la rama
-# ... el implementer programa y corre `bflow check` ...
-bflow report LOCAL-1 --agent implementer --verdict DONE     # con pasos de check, exige un check verde
+bflow approve LOCAL-1                                                # creates the branch
+# ... the implementer writes code and runs `bflow check` ...
+bflow report LOCAL-1 --agent implementer --verdict DONE             # with check steps, requires a green check
 bflow status
 ```
 
-Cada comando imprime el siguiente paso; con `--json`, ese paso llega en `next`. En la práctica le dices a tu agente "qué sigue" y él lo corre. Para conectar Plane o GitHub: [Configuración](docs/es/configuracion.md).
+Each command prints the next step; with `--json`, that step arrives in `next`. In practice, you tell your agent "what's next" and it runs it. To connect Plane or GitHub: [Configuration](docs/en/configuration.md).
 
-## Qué garantiza
+## What it guarantees
 
-Lo que vive en el CLI se cumple con cualquier herramienta (el estado y las gates los maneja bflow, `DONE` exige un check verde, las pruebas del contrato no cambian). Lo que depende de hooks, solo donde hay hooks (Claude Code y OpenCode): bloquear `git reset --hard`, push forzado, `.env` y `.bflow/`. bflow no garantiza la calidad del código ni contiene a un agente malintencionado. La tabla completa: [Conceptos](docs/es/conceptos.md#qué-garantiza-y-qué-no).
+What lives in the CLI is enforced with any tool (state and gates are managed by bflow, `DONE` requires a green check, contract tests cannot change). What depends on hooks only applies where hooks exist (Claude Code and OpenCode): blocking `git reset --hard`, force push, `.env`, and `.bflow/`. bflow does not guarantee code quality or contain a malicious agent. Full table: [Concepts](docs/en/concepts.md#what-it-guarantees-and-what-it-does-not).
 
-## Qué hace bflow y qué no
+## What bflow does and does not do
 
-Gates humanas fijas por carril: `full` tiene 5 (carril, discovery, spec, preguntas de producto y walkthrough), `light` 4 (sin discovery) y `hotfix` 3 (carril, preguntas y walkthrough). Otras gates abren solo en ciertos casos: decisión, rondas, `contract` (full, solo si bflow no puede validar el contrato), `pause` (solo con `bflow pause`) y `repro` (hotfix, solo con `--no-repro`). Condiciones y detalle: [Conceptos](docs/es/conceptos.md#gates).
+Fixed human gates per lane: `full` has 5 (lane, discovery, spec, product questions, and walkthrough), `light` 4 (no discovery), and `hotfix` 3 (lane, questions, and walkthrough). Other gates open only in specific cases: decision, rounds, `contract` (full, only if bflow cannot validate the contract), `pause` (only with `bflow pause`), and `repro` (hotfix, only with `--no-repro`). Conditions and details: [Concepts](docs/en/concepts.md#gates).
 
-- **Sí:** lleva el estado y las transiciones, crea la rama y abre el PR, exige un check verde para el `DONE`, congela las pruebas del contrato y mide tiempo, tokens y rechazos.
-- **No garantiza la calidad del código:** la revisan los agentes y tú; bflow asegura que esos pasos ocurran.
-- **No contiene a un agente malintencionado:** `guard` es una barandilla contra errores comunes, no un sandbox.
-- **No cubre todo en Bash:** `guard` reconoce los comandos y rutas listados en [Conceptos](docs/es/conceptos.md#qué-garantiza-y-qué-no); un comando rebuscado puede pasar.
+- **Yes:** manages state and transitions, creates branches and opens PRs, requires a green check for `DONE`, freezes contract tests, and tracks time, tokens, and rejections.
+- **Does not guarantee code quality:** you and the agents review it; bflow ensures those steps take place.
+- **Does not contain a malicious agent:** `guard` is a rail against common mistakes, not a sandbox.
+- **Does not cover everything in Bash:** `guard` recognizes the commands and paths listed in [Concepts](docs/en/concepts.md#what-it-guarantees-and-what-it-does-not); an obscure command might get through.
 
-## Cifras reales
+## Real numbers
 
-Hay dos mediciones. La del equipo (rc.9): 51 tareas terminadas en 6 repos, 48 de ellas del autor y 3 de otros devs, con calidad tras el merge todavía sin medir; la tabla y sus notas están en [Cifras del equipo](docs/es/por-que-y-rumbo.md#cifras-del-equipo). La de bflow construyendo bflow (58 tareas, corte al 2026-10-16): mediana de 33m de reloj, 14m de agente y 15m esperando a una persona; tabla por tarea en [Cifras](docs/es/cifras.md).
+There are two benchmarks. The team benchmark (rc.9): 51 tasks completed across 6 repos, 48 by the author and 3 by other devs, with post-merge quality not yet measured; the table and notes are in [Team numbers](docs/en/why-and-roadmap.md#team-numbers). The benchmark of bflow building bflow (58 tasks, cutoff 2026-10-16): median 33m wall-clock time, 14m agent time, and 15m waiting for a human; per-task breakdown in [Numbers](docs/en/numbers.md).
 
-No hay comparación con/sin bflow, y no es una promesa de ahorro. Para medir el tuyo: `bflow stats`.
+There is no comparison with/without bflow, and this is not a savings guarantee. To measure yours: `bflow stats`.
 
-## Rumbo
+## Roadmap
 
-Hoy: v0.1.0, la primera release anunciada. Previsto: [v0.1.1](https://github.com/innobytestech/bflow/milestone/8), mejoras que salieron de v0.1.0; [Bloque 2 · Difusión](https://github.com/innobytestech/bflow/milestone/6); [Bloque 3 · Después de publicar](https://github.com/innobytestech/bflow/milestone/7); y la 1.0 con la API de comandos estable. El criterio de cada hito: [Por qué y rumbo](docs/es/por-que-y-rumbo.md#rumbo).
+Today: v0.1.0, the first announced release. Planned: [v0.1.1](https://github.com/innobytestech/bflow/milestone/8), improvements from v0.1.0; [Milestone 2 · Outreach](https://github.com/innobytestech/bflow/milestone/6); [Milestone 3 · Post-launch](https://github.com/innobytestech/bflow/milestone/7); and 1.0 with a stable command API. Criteria for each milestone: [Why and roadmap](docs/en/why-and-roadmap.md#roadmap).
 
-## Documentación
+## Documentation
 
-| Documento | Para qué |
+| Document | Purpose |
 |---|---|
-| [Por qué y rumbo](docs/es/por-que-y-rumbo.md) | La motivación, la meta y los hitos. |
-| [Instalación](docs/es/instalacion.md) | Requisitos, instalar, actualizar, verificar, desinstalar. |
-| [Conceptos](docs/es/conceptos.md) | Núcleo y adaptadores, fases y carriles, gates, `next`, qué queda en el repo, garantías. |
-| [Cómo trabajar con bflow](docs/es/guia.md) | El día a día: qué haces en cada gate, ajustar agentes, qué hacer cuando algo se atora. |
-| [Configuración](docs/es/configuracion.md) | `bflow.yaml`, perfiles, trackers, agentes, check, Claude Code y OpenCode. |
-| [Comandos](docs/es/comandos.md) | Referencia de todos los comandos. |
-| [Cifras](docs/es/cifras.md) | Tiempo, tokens, rechazos y rondas por tarea de bflow en su propio repo. |
-| [Cómo probar y reportar](docs/es/como-probar-y-reportar.md) | Qué esperamos de quien prueba, cómo reportar y problemas conocidos. |
+| [Why and roadmap](docs/en/why-and-roadmap.md) | Motivation, goals, and milestones. |
+| [Installation](docs/en/installation.md) | Requirements, install, update, verify, uninstall. |
+| [Concepts](docs/en/concepts.md) | Core and adapters, phases and lanes, gates, `next`, artifacts left in repo, guarantees. |
+| [How to work with bflow](docs/en/guide.md) | Day-to-day guide: what you do at each gate, tuning agents, resolving blockers. |
+| [Configuration](docs/en/configuration.md) | `bflow.yaml`, profiles, trackers, agents, check, Claude Code, and OpenCode. |
+| [Commands](docs/en/commands.md) | Reference for all commands. |
+| [Numbers](docs/en/numbers.md) | Time, tokens, rejections, and rounds per task building bflow in its own repo. |
+| [How to test and report](docs/en/how-to-test-and-report.md) | What we expect from testers, how to report, and known issues. |
 
-## Desarrollo
+## Development
 
 ```bash
 go vet ./...
-go test ./...        # incluye E2E que compilan el binario y usan git real
+go test ./...        # includes E2E tests that build the binary and use real git
 ```
 
-- Dependencias: biblioteca estándar, `gopkg.in/yaml.v3` y `github.com/zalando/go-keyring`.
-- El núcleo (`internal/...`) nunca importa `internal/adapters/...`; lo verifica `internal/archtest`. El único lugar que conecta ambos es `cmd/bflow`.
-- Los adaptadores externos se prueban con `httptest` y respuestas grabadas, nunca contra servicios reales.
-- Guía para contribuir y cómo ayudar: [`CONTRIBUTING.md`](CONTRIBUTING.md#cómo-ayudar). Vulnerabilidades: [`SECURITY.md`](SECURITY.md). Código de conducta: [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md).
+- Dependencies: standard library, `gopkg.in/yaml.v3`, and `github.com/zalando/go-keyring`.
+- The core (`internal/...`) never imports `internal/adapters/...`; verified by `internal/archtest`. The only place connecting both is `cmd/bflow`.
+- External adapters are tested with `httptest` and recorded responses, never against real services.
+- Contributing guide and how to help: [`CONTRIBUTING.md`](CONTRIBUTING.md#cómo-ayudar). Vulnerabilities: [`SECURITY.md`](SECURITY.md). Code of conduct: [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md).
 
-## Licencia
+## License
 
 [Apache License 2.0](LICENSE). Copyright 2026 Innobytes ([innobytes.tech](https://innobytes.tech)).
