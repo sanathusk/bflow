@@ -14,10 +14,10 @@ import (
 )
 
 func init() {
-	Register(&Command{Name: "update", Summary: "actualiza bflow a la última versión publicada: update [--check] [--force]",
+	Register(&Command{Name: "update", Summary: "updates bflow to latest published version: update [--check] [--force]",
 		Setup: func(fs *flag.FlagSet) {
-			fs.Bool("check", false, "solo decir si hay una versión nueva")
-			fs.Bool("force", false, "reemplazar aunque este binario no venga de una versión publicada")
+			fs.Bool("check", false, "only check if a newer version is available")
+			fs.Bool("force", false, "replace even if this binary does not come from a published release")
 		},
 		Run: runUpdate})
 }
@@ -28,13 +28,14 @@ var executable = os.Executable
 func runUpdate(c *Ctx) output.Envelope {
 	ctx := context.Background()
 	cl := release.NewClient()
+	loc := envLoc(c.Env)
 	// El canal sale de la versión instalada: con una prerelease se busca entre
 	// todas; con una estable (o sin versión publicada) solo entre las estables.
 	_, suffix, perr := release.Parts(c.Version)
 	pre := perr == nil && release.Published(c.Version) && suffix != ""
 	rel, err := cl.Latest(ctx, pre)
 	if err != nil {
-		return output.Fail("update", fmt.Errorf("no se pudo consultar la última versión: %w", err))
+		return output.Fail("update", fmt.Errorf("%s", loc.T("update.failed_latest", err)))
 	}
 	data := map[string]any{"current": c.Version, "latest": rel.Tag}
 	env := func(code, text string) output.Envelope {
@@ -47,15 +48,15 @@ func runUpdate(c *Ctx) output.Envelope {
 	force := str(c.Flags, "force") == "true"
 	if published && !pre && rel.Prerelease {
 		// Un estable nunca recibe una prerelease (llegó por la lista).
-		return env("up_to_date", "ya tienes la última versión ("+c.Version+")")
+		return env("up_to_date", loc.T("update.up_to_date", c.Version))
 	}
 	switch {
 	case !published && !force:
-		return env("update_unknown", fmt.Sprintf("este bflow (%s) no viene de una versión publicada, así que no se puede comparar con %s. bflow update --force lo reemplaza por %s", c.Version, rel.Tag, rel.Tag))
+		return env("update_unknown", loc.T("update.unknown_version", c.Version, rel.Tag, rel.Tag))
 	case published && cmp >= 0 && !force:
-		return env("up_to_date", "ya tienes la última versión ("+c.Version+")")
+		return env("up_to_date", loc.T("update.up_to_date", c.Version))
 	case str(c.Flags, "check") == "true":
-		return env("update_available", fmt.Sprintf("hay una versión nueva: %s (tienes %s). bflow update la instala", rel.Tag, c.Version))
+		return env("update_available", loc.T("update.available", rel.Tag, c.Version))
 	}
 	bin, err := cl.Binary(ctx, rel)
 	if err != nil {
@@ -74,16 +75,16 @@ func runUpdate(c *Ctx) output.Envelope {
 		}
 	}
 	if err := release.Replace(exe, bin); err != nil {
-		return output.Fail("update", errors.New("no se pudo reemplazar el binario: "+err.Error()))
+		return output.Fail("update", errors.New(loc.T("update.replace_failed", err.Error())))
 	}
 	data["path"] = exe
 	text := fmt.Sprintf("bflow %s → %s (%s)", c.Version, rel.Tag, exe)
 	integrations := map[string]string{}
 	for _, t := range c.tools() {
 		name := t.Name()
-		what, done := "la skill", "skill de %s actualizada"
+		what := loc.T("update.tool_skill")
 		if name != "claude" {
-			what, done = "el comando", "comando de %s actualizado"
+			what = loc.T("update.tool_command")
 		}
 		if !had[name] {
 			integrations[name] = "skipped"
@@ -94,13 +95,13 @@ func runUpdate(c *Ctx) output.Envelope {
 		cancel()
 		if err != nil {
 			integrations[name] = "failed"
-			text += fmt.Sprintf("\nno se pudo refrescar %s de %s; corre bflow install %s para refrescar", what, name, name)
+			text += "\n" + loc.T("update.refresh_failed", what, name, name)
 		} else {
 			integrations[name] = "updated"
-			text += fmt.Sprintf("\n"+done, name)
+			text += "\n" + loc.T("update.integration_updated", what, name)
 		}
 	}
-	text += "\nreinicia los paneles abiertos (bflow watch, bflow ui): siguen con el binario anterior"
+	text += "\n" + loc.T("update.restart_panels")
 	data["integrations"] = integrations
 	data["skill"] = "skipped"
 	if v, ok := integrations["claude"]; ok {

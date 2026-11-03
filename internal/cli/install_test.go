@@ -302,7 +302,7 @@ func TestUpdateRefreshesSkill(t *testing.T) {
 		if !strings.Contains(text, "bflow install claude") {
 			t.Errorf("avisa cómo refrescarla: %q", text)
 		}
-		if !strings.Contains(text, "reinicia los paneles abiertos") {
+		if !strings.Contains(text, "reinicia los paneles abiertos") && !strings.Contains(text, "restart open dashboards") {
 			t.Errorf("update avisa que hay que reiniciar los paneles: %q", text)
 		}
 		if b, _ := os.ReadFile(skillPath(home)); string(b) != "vieja" {

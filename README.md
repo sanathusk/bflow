@@ -32,6 +32,8 @@ bflow is opinionated on purpose: it has a defined flow and fixed human gates. It
 
 ## Install
 
+### Prebuilt binary
+
 Linux and macOS (in `~/.local/bin`):
 
 ```bash
@@ -44,7 +46,29 @@ Windows (in `%LOCALAPPDATA%\Programs\bflow`):
 irm https://raw.githubusercontent.com/innobytestech/bflow/main/install.ps1 | iex
 ```
 
-The scripts verify the SHA-256 of the archive before installing. Pinned version, Go, upgrade, and uninstall instructions: [Installation](docs/en/installation.md).
+The scripts verify the SHA-256 of the archive before installing. Pinned version, upgrade, and uninstall instructions: [Installation](docs/en/installation.md).
+
+### From source
+
+Requires Go 1.25 or later:
+
+```bash
+go install innobytes.tech/bflow/cmd/bflow@latest
+```
+
+Or build locally:
+
+```bash
+git clone https://github.com/innobytestech/bflow.git
+cd bflow
+go install ./cmd/bflow
+```
+
+To build locally without installing, use `go build` (optionally passing `-ldflags` to set the version):
+
+```bash
+go build -ldflags "-X main.version=$(git describe --tags --always 2>/dev/null || echo dev)" ./cmd/bflow
+```
 
 ## Quick start
 

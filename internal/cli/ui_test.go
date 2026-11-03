@@ -11,6 +11,7 @@ import (
 
 	"innobytes.tech/bflow/internal/engine"
 	"innobytes.tech/bflow/internal/flow"
+	"innobytes.tech/bflow/internal/i18n"
 	"innobytes.tech/bflow/internal/output"
 )
 
@@ -195,8 +196,14 @@ func TestPanelStaleInState(t *testing.T) {
 
 func TestRenderWatchStale(t *testing.T) {
 	out := renderWatch(bannerOff, "dev", watchData{Repo: "api", Stale: true}, time.Now(), 0)
-	if !strings.Contains(out, "reinicia el panel") {
+	if !strings.Contains(out, "restart the panel") {
 		t.Errorf("watch no avisa: %s", out)
+	}
+
+	b, _ := i18n.Load()
+	outEs := renderWatch(bannerOff, "dev", watchData{Repo: "api", Stale: true}, time.Now(), 0, b.New("es"))
+	if !strings.Contains(outEs, "reinicia el panel") {
+		t.Errorf("watch es no avisa: %s", outEs)
 	}
 }
 

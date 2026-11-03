@@ -14,18 +14,19 @@ import (
 	"innobytes.tech/bflow/internal/config"
 	"innobytes.tech/bflow/internal/engine"
 	"innobytes.tech/bflow/internal/flow"
+	"innobytes.tech/bflow/internal/i18n"
 	"innobytes.tech/bflow/internal/metrics"
 	"innobytes.tech/bflow/internal/output"
 	"innobytes.tech/bflow/internal/store"
 )
 
 func init() {
-	Register(&Command{Name: "watch", Summary: "panel en vivo de la tarea: paso actual, siguiente, tiempos, tokens por agente y eventos: watch [--interval 2s] [--once] [--open] [--web]",
+	Register(&Command{Name: "watch", Summary: "live task dashboard: current step, next, timings, tokens per agent and events: watch [--interval 2s] [--once] [--open] [--web]",
 		Setup: func(fs *flag.FlagSet) {
-			fs.Duration("interval", 2*time.Second, "cada cuánto refrescar")
-			fs.Bool("once", false, "dibujar una vez y salir")
-			fs.Bool("open", false, "abrir el panel en otra ventana o pestaña (si no hay uno abierto)")
-			fs.Bool("web", false, "además, servir la página del panel y abrirla en el navegador (bflow ui)")
+			fs.Duration("interval", 2*time.Second, "refresh interval")
+			fs.Bool("once", false, "draw once and exit")
+			fs.Bool("open", false, "open dashboard in another window or tab if not already open")
+			fs.Bool("web", false, "also serve dashboard page and open in browser (bflow ui)")
 		},
 		Run: runWatch})
 }
@@ -66,7 +67,7 @@ func runWatch(c *Ctx) output.Envelope {
 			return fail(err)
 		}
 		env := output.OK("watch", map[string]any{}, nil)
-		env.Text = renderWatch(m, c.Version, d, time.Now(), 0)
+		env.Text = renderWatch(m, c.Version, d, time.Now(), 0, envLoc(c.Env))
 		return env
 	}
 	f, _ := c.Stdout.(*os.File)
@@ -98,7 +99,7 @@ func runWatch(c *Ctx) output.Envelope {
 				d.WebURL = web.url
 			}
 			d.Stale = stale.Stale()
-			frame = renderWatch(m, c.Version, d, time.Now(), termRows(f)-1)
+			frame = renderWatch(m, c.Version, d, time.Now(), termRows(f)-1, envLoc(c.Env))
 		}
 		if storeDir != "" {
 			beat(storeDir, interval)
@@ -311,7 +312,7 @@ func progress(m bannerMode, v engine.View, width int) []string {
 // renderWatch arma el cuadro. Con rows > 0 lo ajusta a ese alto: primero
 // cambia el banner por una línea y después quita los eventos más viejos; si
 // el cuadro no cabe, el repintado deja basura.
-func renderWatch(m bannerMode, version string, d watchData, now time.Time, rows int) string {
+func renderWatch(m bannerMode, version string, d watchData, now time.Time, rows int, loc ...*i18n.Localizer) string {
 	var b, tail strings.Builder
 	line := func(s string) { b.WriteString("  " + s + "\n") }
 	label := func(l, v string) { dimLabel(&b, m, l, v) }
@@ -328,7 +329,7 @@ func renderWatch(m bannerMode, version string, d watchData, now time.Time, rows 
 		brand = fmt.Sprintf("\x1b[1;38;2;%d;%d;%dmbflow\x1b[0m", gradTo[0], gradTo[1], gradTo[2])
 	}
 	if d.Stale {
-		where += " · " + staleNotice
+		where += " · " + staleNotice(loc...)
 	}
 	compact := "  " + brand + paint(m, cDim, " by innobytes.tech · "+version+" · "+where) + "\n\n"
 	if head == "" {

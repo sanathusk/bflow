@@ -416,7 +416,8 @@ func TestUpdateRefreshesIntegrations(t *testing.T) {
 		if in := integrations(t, d); in["claude"] != "failed" || in["opencode"] != "failed" || d["skill"] != "failed" {
 			t.Errorf("data: %v", d)
 		}
-		if !strings.Contains(text, "corre bflow install claude") || !strings.Contains(text, "corre bflow install opencode") {
+		if (!strings.Contains(text, "corre bflow install claude") && !strings.Contains(text, "run bflow install claude")) ||
+			(!strings.Contains(text, "corre bflow install opencode") && !strings.Contains(text, "run bflow install opencode")) {
 			t.Errorf("avisa cómo refrescar cada una: %q", text)
 		}
 		if b, _ := os.ReadFile(command); string(b) != "vieja" {

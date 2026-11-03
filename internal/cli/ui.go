@@ -25,6 +25,7 @@ import (
 
 	"innobytes.tech/bflow/internal/config"
 	"innobytes.tech/bflow/internal/flow"
+	"innobytes.tech/bflow/internal/i18n"
 	"innobytes.tech/bflow/internal/metrics"
 	"innobytes.tech/bflow/internal/output"
 )
@@ -48,10 +49,10 @@ var uiFonts embed.FS
 const uiDefaultPort = 7719
 
 func init() {
-	Register(&Command{Name: "ui", Summary: "el panel en el navegador, con todos tus repos: ui [--port 7719] [--no-open]",
+	Register(&Command{Name: "ui", Summary: "browser dashboard with all your repos: ui [--port 7719] [--no-open]",
 		Setup: func(fs *flag.FlagSet) {
-			fs.Int("port", uiDefaultPort, "puerto local (si está ocupado se usa otro)")
-			fs.Bool("no-open", false, "no abrir el navegador")
+			fs.Int("port", uiDefaultPort, "local port (picks another if busy)")
+			fs.Bool("no-open", false, "do not open browser")
 		},
 		Run: runUI})
 }
@@ -422,7 +423,7 @@ func (s *uiServer) state(key string) (panelState, error) {
 }
 
 // uiHandler sirve la página, sus fuentes y el estado. allowed son los Host aceptados.
-func uiHandler(allowed []string, state func(key string) (panelState, error)) http.Handler {
+func uiHandler(allowed []string, state func(key string) (panelState, error), loc ...*i18n.Localizer) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -442,9 +443,13 @@ func uiHandler(allowed []string, state func(key string) (panelState, error)) htt
 		}
 		json.NewEncoder(w).Encode(ps)
 	})
+	l := i18n.DefaultLocalizer()
+	if len(loc) > 0 && loc[0] != nil {
+		l = loc[0]
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !slices.Contains(allowed, r.Host) {
-			http.Error(w, "host no permitido", http.StatusForbidden)
+			http.Error(w, l.T("ui.host_forbidden"), http.StatusForbidden)
 			return
 		}
 		mux.ServeHTTP(w, r)
@@ -469,7 +474,7 @@ func serveUI(c *Ctx, port int, fallback bool) (string, func(), error) {
 	addr := ln.Addr().(*net.TCPAddr)
 	allowed := []string{fmt.Sprintf("127.0.0.1:%d", addr.Port), fmt.Sprintf("localhost:%d", addr.Port)}
 	s := &uiServer{c: c, root: e.Cfg.Root, stale: newStaleCheck(binStamp)}
-	srv := &http.Server{Handler: uiHandler(allowed, s.state), ReadHeaderTimeout: 5 * time.Second}
+	srv := &http.Server{Handler: uiHandler(allowed, s.state, envLoc(c.Env)), ReadHeaderTimeout: 5 * time.Second}
 	go srv.Serve(ln)
 	stop := func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -546,10 +551,11 @@ func runUI(c *Ctx) output.Envelope {
 		return fail(err)
 	}
 	defer stopUI()
-	fmt.Fprintln(c.Stdout, "bflow ui en "+url+" (Ctrl+C para cerrar)")
+	loc := envLoc(c.Env)
+	fmt.Fprintln(c.Stdout, loc.T("ui.running_banner", url))
 	if str(c.Flags, "no-open") != "true" {
-		if err := openBrowser(url); err != nil {
-			fmt.Fprintln(c.Stdout, "abre esa dirección en tu navegador ("+err.Error()+")")
+		if err := openBrowser(url, loc); err != nil {
+			fmt.Fprintln(c.Stdout, loc.T("ui.open_browser_hint", err.Error()))
 		}
 	}
 	stop := make(chan os.Signal, 1)
@@ -559,7 +565,7 @@ func runUI(c *Ctx) output.Envelope {
 }
 
 // browserCmd abre url en el navegador del sistema.
-func browserCmd(goos string, getenv func(string) string, url string) ([]string, error) {
+func browserCmd(goos string, getenv func(string) string, url string, loc ...*i18n.Localizer) ([]string, error) {
 	if getenv("CI") != "" {
 		return nil, fmt.Errorf("%w: CI", errNoDesktop)
 	}
@@ -570,13 +576,17 @@ func browserCmd(goos string, getenv func(string) string, url string) ([]string, 
 		return []string{"open", url}, nil
 	}
 	if getenv("DISPLAY") == "" && getenv("WAYLAND_DISPLAY") == "" {
-		return nil, fmt.Errorf("%w: no hay DISPLAY ni WAYLAND_DISPLAY", errNoDesktop)
+		l := i18n.DefaultLocalizer()
+		if len(loc) > 0 && loc[0] != nil {
+			l = loc[0]
+		}
+		return nil, fmt.Errorf("%w: %s", errNoDesktop, l.T("ui.no_display"))
 	}
 	return []string{"xdg-open", url}, nil
 }
 
-func openBrowser(url string) error {
-	args, err := browserCmd(goos, os.Getenv, url)
+func openBrowser(url string, loc ...*i18n.Localizer) error {
+	args, err := browserCmd(goos, os.Getenv, url, loc...)
 	if err != nil {
 		return err
 	}

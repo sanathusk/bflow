@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+
+	"innobytes.tech/bflow/internal/i18n"
 )
 
 // binStamp identifica el bflow instalado en el PATH (tamaño y fecha). Cambia
@@ -41,4 +43,11 @@ func (s *staleCheck) Stale() bool {
 	return now != "" && now != s.start
 }
 
-const staleNotice = "Hay una versión nueva de bflow instalada: reinicia el panel."
+// staleNotice devuelve el aviso de binario nuevo, localizado si se pasa loc.
+func staleNotice(loc ...*i18n.Localizer) string {
+	l := i18n.DefaultLocalizer()
+	if len(loc) > 0 && loc[0] != nil {
+		l = loc[0]
+	}
+	return l.T("watch.stale_notice")
+}

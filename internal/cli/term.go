@@ -6,6 +6,8 @@ import (
 	"io"
 	"os"
 	"strings"
+
+	"innobytes.tech/bflow/internal/i18n"
 )
 
 // isTerminal indica si f es una consola interactiva.
@@ -16,7 +18,7 @@ func isTerminal(f *os.File) bool {
 
 // readSecret lee un secreto. En una consola no muestra lo que se escribe; si
 // la entrada viene de un pipe, lee la primera línea (útil en CI).
-func readSecret(in io.Reader, errw io.Writer, prompt string) (string, error) {
+func readSecret(in io.Reader, errw io.Writer, prompt string, loc ...*i18n.Localizer) (string, error) {
 	f, isFile := in.(*os.File)
 	if isFile && isTerminal(f) {
 		fmt.Fprint(errw, prompt)
@@ -28,7 +30,11 @@ func readSecret(in io.Reader, errw io.Writer, prompt string) (string, error) {
 	}
 	line, err := bufio.NewReader(in).ReadString('\n')
 	if err != nil && line == "" {
-		return "", fmt.Errorf("no se recibió el token: %w", err)
+		l := i18n.DefaultLocalizer()
+		if len(loc) > 0 && loc[0] != nil {
+			l = loc[0]
+		}
+		return "", fmt.Errorf("%s", l.T("term.no_token_received", err))
 	}
 	return strings.TrimSpace(line), nil
 }
