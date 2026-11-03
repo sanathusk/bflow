@@ -130,15 +130,20 @@ type panelChoice struct {
 	watch, web     bool
 }
 
-var panelChoices = []panelChoice{
-	{"el panel en otra terminal y su página en el navegador", "panel y navegador", true, true},
-	{"solo el panel en otra terminal", "solo el panel", true, false},
-	{"nada: los abro yo (bflow watch --open, bflow ui)", "nada", false, false},
+func getPanelChoices(loc *i18n.Localizer) []panelChoice {
+	if loc == nil {
+		loc = i18n.DefaultLocalizer()
+	}
+	return []panelChoice{
+		{loc.T("init.panel_choice_both"), loc.T("init.panel_choice_both_summary"), true, true},
+		{loc.T("init.panel_choice_terminal"), loc.T("init.panel_choice_terminal_summary"), true, false},
+		{loc.T("init.panel_choice_none"), loc.T("init.panel_choice_none_summary"), false, false},
+	}
 }
 
-func panelLabels() []string {
+func panelLabels(choices []panelChoice) []string {
 	var out []string
-	for _, p := range panelChoices {
+	for _, p := range choices {
 		out = append(out, p.label)
 	}
 	return out
@@ -168,7 +173,8 @@ func runInit(c *Ctx) output.Envelope {
 	root := config.FindRoot(c.Dir)
 	path := filepath.Join(root, config.RepoFile)
 	if _, err := os.Stat(path); err == nil && str(c.Flags, "force") != "true" && !c.DryRun {
-		return output.Rejected("exists", path+" ya existe (usa --force para regenerarlo, o edita el archivo)")
+		loc := envLoc(c.Env)
+		return output.RejectedLoc(loc, "exists", fmt.Sprintf(loc.T("init.already_exists"), path))
 	}
 	flagAgents, err := parseAgentFlag(str(c.Flags, "agent"))
 	if err != nil {
@@ -352,7 +358,8 @@ func runInit(c *Ctx) output.Envelope {
 	var panel *panelChoice
 	if !p.yes && !c.DryRun && desktop(goos, os.Getenv) == nil {
 		if decided, err := config.UIDecided(); err == nil && !decided {
-			pc := panelChoices[p.choose("Al empezar una tarea, ¿qué abro? (es tuya: va a tu config global, no al repo)", panelLabels(), 0)]
+			choices := getPanelChoices(loc)
+			pc := choices[p.choose(loc.T("init.prompt_panel_startup"), panelLabels(choices), 0)]
 			panel = &pc
 		}
 	}
@@ -383,7 +390,7 @@ func runInit(c *Ctx) output.Envelope {
 			fmt.Fprintln(c.Stderr, "no se pudo guardar qué abrir al empezar una tarea:", err)
 		} else {
 			data["ui"] = map[string]bool{"watch": panel.watch, "web": panel.web}
-			panelText = "\nal empezar una tarea: " + panel.summary + " (ui: en " + config.GlobalPath() + ")"
+			panelText = fmt.Sprintf(loc.T("init.panel_summary_created"), panel.summary, config.GlobalPath())
 		}
 	}
 	var next []string
@@ -527,31 +534,35 @@ func runDoctor(c *Ctx) output.Envelope {
 	add := func(area, status, format string, a ...any) {
 		items = append(items, docItem{Area: area, Status: status, Detail: fmt.Sprintf(format, a...)})
 	}
+	loc := envLoc(c.Env)
 	e, err := engineFor(c)
 	if err != nil {
 		add("config", "fail", "%v", err)
 		return doctorEnvelope(items)
 	}
+	if e.Loc != nil {
+		loc = e.Loc
+	}
 	cfg := e.Cfg
 	src := cfg.Sources.Repo
 	if src == "" {
-		src = "sin bflow.yaml (valores por defecto; bflow init)"
+		src = loc.T("doctor.config_default")
 	}
 	if cfg.Sources.Profile != "" {
-		src += " · perfil " + cfg.Sources.Profile
+		src = fmt.Sprintf(loc.T("doctor.config_profile"), src, cfg.Sources.Profile)
 	}
 	add("config", "ok", "%s", src)
 
 	if e.Git == nil {
-		add("git", "warn", "no es un repo git: sin ramas, PR ni check")
+		add("git", "warn", "%s", loc.T("doctor.git_not_repo"))
 	} else if r, err := e.Git.RemoteURL(ctx); err != nil {
-		add("git", "warn", "sin remoto %s: no hay push ni PR", cfg.VCS.Remote)
+		add("git", "warn", loc.T("doctor.git_no_remote"), cfg.VCS.Remote)
 	} else {
-		add("git", "ok", "remoto %s · base %s", r, orDash(cfg.VCS.BaseBranch))
+		add("git", "ok", loc.T("doctor.git_remote_base"), r, orDash(cfg.VCS.BaseBranch))
 	}
 
 	if log, err := e.Store.Log(""); err != nil {
-		add("veredicto-modelos", "warn", "no se pudo leer el log: %v", err)
+		add("veredicto-modelos", "warn", loc.T("doctor.models_log_read_error"), err)
 	} else {
 		v := metrics.CompareModels(log, time.Now())
 		status := "ok"
@@ -584,33 +595,33 @@ func runDoctor(c *Ctx) output.Envelope {
 	}
 	switch {
 	case len(cfg.Check.Steps) == 0:
-		add("herramientas", "warn", "sin pasos de check: DONE se acepta sin verificar (bflow init los propone)")
+		add("herramientas", "warn", "%s", loc.T("doctor.tools_no_steps"))
 	case len(missing) > 0:
-		add("herramientas", "fail", "faltan %s (pasos obligatorios del check)", strings.Join(missing, ", "))
+		add("herramientas", "fail", loc.T("doctor.tools_missing_required"), strings.Join(missing, ", "))
 	case len(optional) > 0:
-		add("herramientas", "warn", "check degradado: faltan %s (opcionales)", strings.Join(optional, ", "))
+		add("herramientas", "warn", loc.T("doctor.tools_missing_optional"), strings.Join(optional, ", "))
 	default:
-		add("herramientas", "ok", "%d pasos de check con sus herramientas instaladas", len(cfg.Check.Steps))
+		add("herramientas", "ok", loc.T("doctor.tools_ok"), len(cfg.Check.Steps))
 	}
 
-	doctorTracker(ctx, e.Tracker, cfg, add)
+	doctorTracker(ctx, e.Tracker, cfg, add, loc)
 
 	if e.Host != nil {
 		if u, ok := e.Host.(interface {
 			User(context.Context) (string, error)
 		}); ok {
 			if login, err := u.User(ctx); errors.Is(err, vcs.ErrNoCredentials) {
-				add("host", "warn", "%s sin token: el PR se deja listo con URL de compare (bflow connect %s)", e.Host.Name(), e.Host.Name())
+				add("host", "warn", loc.T("doctor.host_no_token"), e.Host.Name(), e.Host.Name())
 			} else if err != nil {
 				add("host", "fail", "%v", err)
 			} else if err := checkRepo(ctx, e.Host); err != nil {
 				add("host", "fail", "%v", err)
 			} else {
-				add("host", "ok", "%s como %s", e.Host.Name(), login)
+				add("host", "ok", loc.T("doctor.host_ok"), e.Host.Name(), login)
 			}
 		}
 	} else if cfg.VCS.Host == "" {
-		add("host", "ok", "sin host remoto configurado: push y PR a mano")
+		add("host", "ok", "%s", loc.T("doctor.host_none"))
 	}
 
 	var runs []string
@@ -619,19 +630,19 @@ func runDoctor(c *Ctx) output.Envelope {
 	}
 	if n, gaps := setup.CIGaps(cfg.Root, runs); len(gaps) > 0 {
 		for _, g := range gaps {
-			add("ci", "warn", "%s: agrégalo a check.steps para verlo antes del PR", g)
+			add("ci", "warn", loc.T("doctor.ci_gap_warn"), g)
 		}
 	} else if n > 0 {
-		add("ci", "ok", "el check cubre los %d comandos de verificación de CI", n)
+		add("ci", "ok", loc.T("doctor.ci_covered"), n)
 	}
 
 	ec := cfg.Env
 	if len(ec.HealthPaths)+len(ec.TCP)+len(ec.RequireEnv) > 0 {
 		res := envcheck.Run(ctx, ec, os.Getenv)
 		if n := envcheck.Failed(res); n > 0 {
-			add("entorno", "warn", "%d de %d verificaciones fallan (bflow env check)", n, len(res))
+			add("entorno", "warn", loc.T("doctor.env_failed"), n, len(res))
 		} else {
-			add("entorno", "ok", "%d verificaciones", len(res))
+			add("entorno", "ok", loc.T("doctor.env_ok"), len(res))
 		}
 	}
 
@@ -645,31 +656,31 @@ func runDoctor(c *Ctx) output.Envelope {
 		}
 		switch {
 		case err != nil:
-			add("agente", "warn", "claude: falta .claude/settings.json con los hooks de bflow (corre bflow install claude)")
+			add("agente", "warn", "%s", loc.T("doctor.claude_missing_settings"))
 		case len(missing) > 0:
-			add("agente", "warn", "claude: .claude/settings.json no llama a %s (corre bflow install claude)", strings.Join(missing, ", "))
+			add("agente", "warn", loc.T("doctor.claude_missing_hooks"), strings.Join(missing, ", "))
 		case !strings.Contains(string(b), "bflow guard --reads"):
-			add("agente", "warn", "claude: el guard no ve Read; la cobertura del reviewer no se mide (corre bflow install claude)")
+			add("agente", "warn", "%s", loc.T("doctor.claude_guard_no_reads"))
 		default:
-			add("agente", "ok", "claude: hooks de bflow instalados")
+			add("agente", "ok", "%s", loc.T("doctor.claude_hooks_ok"))
 		}
 		if home, err := os.UserHomeDir(); err == nil {
 			switch path, state := c.Agent.SkillState(home); state {
 			case "ok":
-				add("skill", "ok", "claude: skill de bflow al día (%s)", path)
+				add("skill", "ok", loc.T("doctor.claude_skill_ok"), path)
 			case "missing":
-				add("skill", "warn", "claude: falta la skill de bflow (%s); corre bflow install claude", path)
+				add("skill", "warn", loc.T("doctor.claude_skill_missing"), path)
 			default:
-				add("skill", "warn", "claude: la skill instalada (%s) difiere de la de este bflow; corre bflow install claude", path)
+				add("skill", "warn", loc.T("doctor.claude_skill_differs"), path)
 			}
 		}
 		switch have, min, ok, err := c.Agent.Version(); {
 		case err != nil:
-			add("agente", "warn", "claude: no se pudo leer la versión (%v); bflow necesita %s o posterior", err, min)
+			add("agente", "warn", loc.T("doctor.claude_version_read_err"), err, min)
 		case !ok:
-			add("agente", "warn", "claude: versión %s; bflow necesita %s o posterior (claude update)", have, min)
+			add("agente", "warn", loc.T("doctor.claude_version_too_low"), have, min)
 		default:
-			add("agente", "ok", "claude: versión %s", have)
+			add("agente", "ok", loc.T("doctor.claude_version_ok"), have)
 		}
 		var procs []string
 		for _, s := range c.Agent.Skills(cfg.Root) {
@@ -681,12 +692,12 @@ func runDoctor(c *Ctx) output.Envelope {
 			}
 		}
 		if len(procs) > 0 {
-			add("skills", "warn", "parecen skills de proceso y pueden chocar con bflow (ramas, PR, tracker, specs): %s. Si no chocan, agrégalas a doctor.ignore_skills", strings.Join(procs, "; "))
+			add("skills", "warn", loc.T("doctor.claude_process_skills"), strings.Join(procs, "; "))
 		}
 		status, detail := startupCheck(c.Agent.StartupContext(cfg.Root))
 		add("contexto", status, "%s", detail)
 		if cfg.Guard.ForbidCoauthor && !c.Agent.CoauthorOff(cfg.Root) {
-			add("agente", "warn", `claude agrega Co-Authored-By a sus commits y guard.forbid_coauthor los bloquea: cada commit se rechaza y se repite. Corre bflow install claude, o pon "attribution": { "commit": "", "pr": "" } en .claude/settings.json`)
+			add("agente", "warn", "%s", loc.T("doctor.claude_coauthor_conflict"))
 		}
 	}
 
@@ -695,15 +706,15 @@ func runDoctor(c *Ctx) output.Envelope {
 		case err != nil:
 			add("agentes", "fail", "%v", err)
 		case len(p.Conflicts) > 0:
-			add("agentes", "fail", "%s existe y no lo generó bflow: renómbralo y corre bflow render", strings.Join(p.Conflicts, ", "))
+			add("agentes", "fail", loc.T("doctor.agents_conflict"), strings.Join(p.Conflicts, ", "))
 		case len(p.Changed)+len(p.Stale) > 0:
-			add("agentes", "warn", "desactualizados: %s (bflow render y commitea)", strings.Join(append(p.Changed, p.Stale...), ", "))
+			add("agentes", "warn", loc.T("doctor.agents_outdated"), strings.Join(append(p.Changed, p.Stale...), ", "))
 		default:
-			add("agentes", "ok", "%d archivos generados y al día", len(p.Files))
+			add("agentes", "ok", loc.T("doctor.agents_ok"), len(p.Files))
 		}
 	}
 	if cfg.Agent.Has("opencode") {
-		doctorOpenCode(c, cfg, add)
+		doctorOpenCode(c, cfg, add, loc)
 	}
 
 	if cfg.Tracker.Adapter == "local" {
@@ -712,7 +723,7 @@ func runDoctor(c *Ctx) output.Envelope {
 			seen[strings.ToLower(e)] = true
 		}
 		if len(seen) >= 2 {
-			add("tracker", "warn", ".bflow/ no se comparte entre personas y hay %d autores en los últimos 90 días: usa tracker github o plane para que todos vean las mismas tareas", len(seen))
+			add("tracker", "warn", loc.T("doctor.local_tracker_authors"), len(seen))
 		}
 	}
 
@@ -726,15 +737,19 @@ func runDoctor(c *Ctx) output.Envelope {
 			}
 		}
 		if best > 250*time.Millisecond {
-			add("arranque", "warn", "bflow tarda %dms en arrancar: suele ser el antivirus escaneando un ejecutable sin firmar; el guard corre antes de cada herramienta (considera excluir %s)", best.Milliseconds(), filepath.Dir(exe))
+			add("arranque", "warn", loc.T("doctor.startup_slow"), best.Milliseconds(), filepath.Dir(exe))
 		} else {
-			add("arranque", "ok", "%dms", best.Milliseconds())
+			add("arranque", "ok", loc.T("doctor.startup_ok"), best.Milliseconds())
 		}
 	}
 	return doctorEnvelope(items)
 }
 
-func doctorTracker(ctx context.Context, t tracker.Tracker, cfg *config.Config, add func(string, string, string, ...any)) {
+func doctorTracker(ctx context.Context, t tracker.Tracker, cfg *config.Config, add func(string, string, string, ...any), locs ...*i18n.Localizer) {
+	loc := i18n.DefaultLocalizer()
+	if len(locs) > 0 && locs[0] != nil {
+		loc = locs[0]
+	}
 	if cfg.Tracker.Adapter == "local" {
 		add("tracker", "ok", "local")
 		return
@@ -748,18 +763,18 @@ func doctorTracker(ctx context.Context, t tracker.Tracker, cfg *config.Config, a
 		}
 		if !slices.ContainsFunc(ps, func(p tracker.Project) bool { return strings.EqualFold(p.ID, cfg.Tracker.Project) }) {
 			if gh {
-				add("tracker", "fail", "el project %s no aparece entre los que ve el token (¿falta el permiso de Projects? bflow connect github)", cfg.Tracker.Project)
+				add("tracker", "fail", loc.T("doctor.tracker_project_not_found_gh"), cfg.Tracker.Project)
 			} else {
-				add("tracker", "fail", "el proyecto %s no está en %s", cfg.Tracker.Project, cfg.Tracker.Workspace)
+				add("tracker", "fail", loc.T("doctor.tracker_project_not_found"), cfg.Tracker.Project, cfg.Tracker.Workspace)
 			}
 			return
 		}
 	}
-	msg := fmt.Sprintf("%s · proyecto %s", cfg.Tracker.Adapter, cfg.Tracker.Project)
+	msg := fmt.Sprintf(loc.T("doctor.tracker_msg"), cfg.Tracker.Adapter, cfg.Tracker.Project)
 	if gh {
-		msg = "github · etiquetas bflow:* (sin project)"
+		msg = loc.T("doctor.tracker_msg_gh_no_project")
 		if cfg.Tracker.Project != "" {
-			msg = "github · project " + cfg.Tracker.Project + " (campo Status)"
+			msg = fmt.Sprintf(loc.T("doctor.tracker_msg_gh_project"), cfg.Tracker.Project)
 		}
 	}
 	if sl, ok := t.(tracker.StateLister); ok {
@@ -781,7 +796,7 @@ func doctorTracker(ctx context.Context, t tracker.Tracker, cfg *config.Config, a
 			}
 		}
 		if len(lack) > 0 {
-			add("tracker", "warn", "%s · sin estado para: %s (bflow tracker setup)", msg, strings.Join(lack, ", "))
+			add("tracker", "warn", loc.T("doctor.tracker_no_state"), msg, strings.Join(lack, ", "))
 			return
 		}
 	}
@@ -809,30 +824,34 @@ func doctorEnvelope(items []docItem) output.Envelope {
 
 // doctorOpenCode revisa la integración con OpenCode: versión, comando /bflow,
 // alias de modelo sin resolver, el plugin de guard y tokens y lo que OpenCode no cubre.
-func doctorOpenCode(c *Ctx, cfg *config.Config, add func(string, string, string, ...any)) {
+func doctorOpenCode(c *Ctx, cfg *config.Config, add func(string, string, string, ...any), locs ...*i18n.Localizer) {
+	loc := i18n.DefaultLocalizer()
+	if len(locs) > 0 && locs[0] != nil {
+		loc = locs[0]
+	}
 	t := c.tool("opencode")
 	if t == nil {
-		add("agente", "fail", "opencode: no hay adaptador en este bflow")
+		add("agente", "fail", "%s", loc.T("doctor.opencode_no_adapter"))
 		return
 	}
 	switch have, _, _, err := t.Version(); {
 	case err != nil:
-		add("agente", "warn", "opencode: no se pudo leer la versión (%v); ¿está instalado y en el PATH?", err)
+		add("agente", "warn", loc.T("doctor.opencode_version_read_err"), err)
 	default:
 		plug := ".opencode/plugins/bflow2/"
 		if n, _ := strconv.Atoi(strings.SplitN(strings.TrimPrefix(have, "v"), ".", 2)[0]); n == 1 {
 			plug = ".opencode/plugins/bflow.js"
 		}
-		add("agente", "ok", "opencode: versión %s, usa %s", have, plug)
+		add("agente", "ok", loc.T("doctor.opencode_version_ok"), have, plug)
 	}
 	if home, err := os.UserHomeDir(); err == nil || os.Getenv("XDG_CONFIG_HOME") != "" {
 		switch path, state := t.SkillState(home); state {
 		case "ok":
-			add("comando", "ok", "opencode: comando /bflow al día (%s)", path)
+			add("comando", "ok", loc.T("doctor.opencode_cmd_ok"), path)
 		case "missing":
-			add("comando", "warn", "opencode: falta el comando /bflow; corre bflow install opencode")
+			add("comando", "warn", "%s", loc.T("doctor.opencode_cmd_missing"))
 		default:
-			add("comando", "warn", "opencode: el comando /bflow instalado (%s) difiere del de este bflow; corre bflow install opencode", path)
+			add("comando", "warn", loc.T("doctor.opencode_cmd_differs"), path)
 		}
 	}
 	var logFs []LogFinding
@@ -849,9 +868,9 @@ func doctorOpenCode(c *Ctx, cfg *config.Config, add func(string, string, string,
 			for _, u := range un {
 				parts = append(parts, fmt.Sprintf("%s (%s)", u.Alias, strings.Join(u.Agents, ", ")))
 			}
-			add("modelos", "warn", "opencode: alias sin equivalente, esos agentes salen sin model: %s; define models.opencode.<alias> en bflow.yaml (equipo) o en %s (solo tú)", strings.Join(parts, "; "), config.GlobalPath())
+			add("modelos", "warn", loc.T("doctor.opencode_unresolved_alias"), strings.Join(parts, "; "), config.GlobalPath())
 		} else if !regionBad {
-			add("modelos", "ok", "opencode: modelos de los agentes resueltos")
+			add("modelos", "ok", "%s", loc.T("doctor.opencode_models_resolved"))
 		}
 		for _, f := range logFs {
 			if f.Area == "modelos" {
@@ -859,15 +878,15 @@ func doctorOpenCode(c *Ctx, cfg *config.Config, add func(string, string, string,
 			}
 		}
 		if cfg.ProfileModelsIgnored {
-			add("modelos", "warn", "opencode: los models del perfil %s no se aplican; ponlos en bflow.yaml o en %s", cfg.Profile, config.GlobalPath())
+			add("modelos", "warn", loc.T("doctor.opencode_profile_models_ignored"), cfg.Profile, config.GlobalPath())
 		}
 		if mo, ok := t.(ModelOverrider); ok {
 			home, _ := os.UserHomeDir()
 			switch sy, state := mo.ModelsState(home, p.Overrides["opencode"]); state {
 			case "stale":
-				add("modelos", "warn", "opencode: %s no tiene los modelos personales al día; corre bflow render", sy.Path)
+				add("modelos", "warn", loc.T("doctor.opencode_models_stale"), sy.Path)
 			case "manual":
-				add("modelos", "warn", "opencode: %s no se puede editar; bflow render te da el bloque a pegar: %s", sy.Path, sy.Paste)
+				add("modelos", "warn", loc.T("doctor.opencode_models_manual"), sy.Path, sy.Paste)
 			}
 		}
 	}
@@ -888,11 +907,11 @@ func doctorOpenCode(c *Ctx, cfg *config.Config, add func(string, string, string,
 		}
 		switch {
 		case len(bad) > 0:
-			add("plugin", "fail", "opencode: %s existe y no lo generó bflow; renómbralo o bórralo y corre bflow render", strings.Join(bad, ", "))
+			add("plugin", "fail", loc.T("doctor.opencode_plugin_conflict"), strings.Join(bad, ", "))
 		case len(stale) > 0:
-			add("plugin", "warn", "opencode: el plugin %s falta o difiere del de este bflow (guard y tokens); corre bflow render", strings.Join(stale, ", "))
+			add("plugin", "warn", loc.T("doctor.opencode_plugin_stale"), strings.Join(stale, ", "))
 		default:
-			add("plugin", "ok", "opencode: plugin de guard y tokens al día (1.x y 2.x)")
+			add("plugin", "ok", "%s", loc.T("doctor.opencode_plugin_ok"))
 		}
 	}
 	for _, f := range logFs {
@@ -900,7 +919,7 @@ func doctorOpenCode(c *Ctx, cfg *config.Config, add func(string, string, string,
 			add(f.Area, f.Level, "%s", f.Msg)
 		}
 	}
-	add("cobertura", "ok", "opencode no tiene nudge de subagente ni hook de inicio de sesión; lo cubren bflow report, bflow check --verify y el bloque de AGENTS.md")
+	add("cobertura", "ok", "%s", loc.T("doctor.opencode_coverage"))
 }
 
 // usesClaude dice si el repo ya trabaja con Claude Code.

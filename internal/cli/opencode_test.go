@@ -522,7 +522,7 @@ func TestDoctorOpenCode(t *testing.T) {
 	hasVersion := false
 	for _, it := range checks["agente"] {
 		d := it["detail"].(string)
-		hasVersion = hasVersion || (strings.HasPrefix(d, "opencode:") && strings.Contains(d, "versión"))
+		hasVersion = hasVersion || (strings.HasPrefix(d, "opencode:") && (strings.Contains(d, "versión") || strings.Contains(d, "version")))
 	}
 	if !hasVersion {
 		t.Errorf("reporta la versión de opencode (ok o warn si no corre): %v", checks["agente"])

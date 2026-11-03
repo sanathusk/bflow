@@ -220,7 +220,7 @@ func TestDoctorModelVerdictLogUnreadable(t *testing.T) {
 	if found == nil {
 		t.Fatalf("doctor sin ítem veredicto-modelos: %s", raw)
 	}
-	if found["status"] != "warn" || !strings.HasPrefix(fmt.Sprint(found["detail"]), "no se pudo leer el log") {
+	if found["status"] != "warn" || (!strings.HasPrefix(fmt.Sprint(found["detail"]), "no se pudo leer el log") && !strings.HasPrefix(fmt.Sprint(found["detail"]), "could not read log")) {
 		t.Errorf("ítem: %v", found)
 	}
 	if code != baseCode {

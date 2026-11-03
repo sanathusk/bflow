@@ -143,16 +143,19 @@ func TestDoctorAgentsAndSkills(t *testing.T) {
 		}
 	}
 	text, _, _ := r.hook("", "doctor")
-	for _, want := range []string{"desactualizados", "sdd (", "doctor.ignore_skills", "bflow hook subagent-stop"} {
+	for _, want := range []string{"sdd (", "doctor.ignore_skills", "bflow hook subagent-stop"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("doctor sin %q:\n%s", want, text)
 		}
+	}
+	if !strings.Contains(text, "desactualizados") && !strings.Contains(text, "outdated") {
+		t.Errorf("doctor sin desactualizados/outdated:\n%s", text)
 	}
 	if strings.Contains(text, "sdd-walkthrough (") || strings.Contains(text, "go-handlers") {
 		t.Errorf("doctor avisa de skills ignoradas o de oficio:\n%s", text)
 	}
 	r.ok("render")
-	if text, _, _ := r.hook("", "doctor"); !strings.Contains(text, "archivos generados y al día") {
+	if text, _, _ := r.hook("", "doctor"); !strings.Contains(text, "archivos generados y al día") && !strings.Contains(text, "files generated and up to date") {
 		t.Errorf("doctor después de render:\n%s", text)
 	}
 }

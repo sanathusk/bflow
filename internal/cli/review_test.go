@@ -204,7 +204,10 @@ func TestStatsReviewCoverage(t *testing.T) {
 // R18: doctor avisa si el guard de Claude no ve Read.
 func TestDoctorWarnsGuardWithoutReads(t *testing.T) {
 	setHome(t)
-	const warn = "claude: el guard no ve Read; la cobertura del reviewer no se mide (corre bflow install claude)"
+	const (
+		warnEs = "claude: el guard no ve Read; la cobertura del reviewer no se mide (corre bflow install claude)"
+		warnEn = "claude: guard does not see Read; reviewer coverage is not measured (run bflow install claude)"
+	)
 	hooks := func(guardCmd string) string {
 		return `{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"bflow hook session-start"}]}],` +
 			`"PreToolUse":[{"matcher":"Bash|Edit|Write|MultiEdit|NotebookEdit","hooks":[{"type":"command","command":"` + guardCmd + `"}]}],` +
@@ -212,7 +215,8 @@ func TestDoctorWarnsGuardWithoutReads(t *testing.T) {
 	}
 	has := func(env *Env) bool {
 		for _, it := range doctorChecks(t, env)["agente"] {
-			if strings.Contains(it["detail"].(string), warn) {
+			d := it["detail"].(string)
+			if strings.Contains(d, warnEs) || strings.Contains(d, warnEn) {
 				return true
 			}
 		}
@@ -227,7 +231,7 @@ func TestDoctorWarnsGuardWithoutReads(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !has(env) {
-		t.Errorf("guard sin --reads: falta el aviso %q", warn)
+		t.Errorf("guard sin --reads: falta el aviso (%q o %q)", warnEs, warnEn)
 	}
 	if err := os.WriteFile(settings, []byte(hooks("bflow guard --reads")), 0o644); err != nil {
 		t.Fatal(err)

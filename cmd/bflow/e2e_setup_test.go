@@ -105,7 +105,9 @@ func TestInitAngularInteractiveWithProfile(t *testing.T) {
 	st := r.ok("status")
 	_ = st
 	out, code = r.runIn("", "doctor")
-	if code != 0 || !strings.Contains(out, "perfil acme") || !strings.Contains(out, "github sin token") || !strings.Contains(out, "claude") {
+	if code != 0 || (!strings.Contains(out, "perfil acme") && !strings.Contains(out, "profile acme")) ||
+		(!strings.Contains(out, "github sin token") && !strings.Contains(out, "github without token")) ||
+		!strings.Contains(out, "claude") {
 		t.Errorf("doctor (exit %d):\n%s", code, out)
 	}
 	// profile use sobre un repo existente conserva el resto del archivo.
@@ -127,8 +129,8 @@ func TestInitAsksPanelOnce(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(r.dir, "Makefile"), []byte("test:\n\tgo test\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	// idioma en (1), tracker local (1), rama base por defecto, usar pasos (s), solo el panel (2).
-	out, code := r.runIn("1\n1\n\ns\n2\n", "init")
+	// idioma es (2), tracker local (1), rama base por defecto, usar pasos (s), solo el panel (2).
+	out, code := r.runIn("2\n1\n\ns\n2\n", "init")
 	if code != 0 || !strings.Contains(out, "¿qué abro?") || !strings.Contains(out, "al empezar una tarea: solo el panel") {
 		t.Fatalf("init (exit %d):\n%s", code, out)
 	}
@@ -141,7 +143,7 @@ func TestInitAsksPanelOnce(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(other.dir, "Makefile"), []byte("test:\n\tgo test\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if out, code := other.runIn("1\n1\n\ns\n", "init"); code != 0 || strings.Contains(out, "¿qué abro?") {
+	if out, code := other.runIn("2\n1\n\ns\n", "init"); code != 0 || strings.Contains(out, "¿qué abro?") {
 		t.Errorf("segundo init (exit %d):\n%s", code, out)
 	}
 }

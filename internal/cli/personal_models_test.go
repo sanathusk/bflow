@@ -360,7 +360,7 @@ func TestDoctorOpenCodeModels(t *testing.T) {
 	setGlobal(t, prof)
 	_ = os.WriteFile(filepath.Join(env.Dir, "bflow.yaml"), []byte("agent: [claude, opencode]\nprofile: p\n"), 0o644)
 	items = modelosItems(t, env)
-	if !anyDetail(items, "warn", "perfil", "p") {
+	if !anyDetail(items, "warn", "p") || (!anyDetail(items, "warn", "perfil") && !anyDetail(items, "warn", "profile")) {
 		t.Errorf("avisa que los models del perfil no se aplican: %v", items)
 	}
 	if !anyDetail(items, "warn", "sonnet") {
@@ -378,7 +378,7 @@ func TestDoctorOpenCodeModelosRegion(t *testing.T) {
 	}
 	old := time.Now().Add(-3 * time.Hour)
 	_ = os.Chtimes(oc, old, old)
-	if !anyDetail(modelosItems(t, env), "ok", "resueltos") {
+	if !anyDetail(modelosItems(t, env), "ok", "resueltos") && !anyDetail(modelosItems(t, env), "ok", "resolved") {
 		t.Fatalf("sin rechazo, modelos ok: %v", modelosItems(t, env))
 	}
 	dir := filepath.Join(data, "opencode", "log")
@@ -389,7 +389,7 @@ func TestDoctorOpenCodeModelosRegion(t *testing.T) {
 		t.Fatal(err)
 	}
 	items := modelosItems(t, env)
-	if anyDetail(items, "ok", "resueltos") {
+	if anyDetail(items, "ok", "resueltos") || anyDetail(items, "ok", "resolved") {
 		t.Errorf("con rechazo vigente no hay modelos ok: %v", items)
 	}
 	if !anyDetail(items, "warn", "agentes con un modelo rechazado", "proveedor") {
