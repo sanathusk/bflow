@@ -70,6 +70,12 @@ func TestDetectLang(t *testing.T) {
 		{"default", "", nil, Default},
 		{"normalize region", "en_US", nil, "en"},
 		{"normalize encoding", "es_ES.UTF-8", nil, "es"},
+		{"ignore C locale", "", map[string]string{"LANG": "C"}, Default},
+		{"ignore C.UTF-8 locale", "", map[string]string{"LC_ALL": "C.UTF-8"}, Default},
+		{"ignore POSIX locale", "", map[string]string{"LANG": "POSIX"}, Default},
+		{"fall back past C locale to valid locale", "", map[string]string{"LC_MESSAGES": "C", "LANG": "es_ES.UTF-8"}, "es"},
+		{"unsupported locale falls back to default en", "", map[string]string{"LANG": "fr_FR.UTF-8"}, Default},
+		{"unsupported config falls back to default en", "de", nil, Default},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

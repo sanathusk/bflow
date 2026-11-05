@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 )
 
@@ -131,23 +132,36 @@ func (l *Localizer) Msg(key string, args ...any) string {
 func (l *Localizer) Lang() string { return l.lang }
 
 // DetectLang picks the language from config > env > system locale > default.
+// Non-language locales (e.g. "C", "POSIX") or unsupported languages fall back to
+// subsequent checks or to the default language ("en").
 func DetectLang(cfgLang string) string {
 	if cfgLang != "" {
-		return normalize(cfgLang)
+		if norm := normalize(cfgLang); slices.Contains(Supported, norm) {
+			return norm
+		}
 	}
 	if v := os.Getenv("BFLOW_LANG"); v != "" {
-		return normalize(v)
+		if norm := normalize(v); slices.Contains(Supported, norm) {
+			return norm
+		}
 	}
 	for _, k := range []string{"LC_MESSAGES", "LC_ALL", "LANG"} {
 		if v := os.Getenv(k); v != "" {
-			return normalize(v)
+			if norm := normalize(v); slices.Contains(Supported, norm) {
+				return norm
+			}
 		}
 	}
 	return Default
 }
 
 func normalize(tag string) string {
+	tag = strings.TrimSpace(tag)
 	tag = strings.SplitN(tag, ".", 2)[0] // en_US.UTF-8 → en_US
 	tag = strings.SplitN(tag, "_", 2)[0] // en_US → en
-	return strings.ToLower(tag)
+	tag = strings.ToLower(tag)
+	if tag == "c" || tag == "posix" {
+		return ""
+	}
+	return tag
 }

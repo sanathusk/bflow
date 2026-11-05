@@ -203,6 +203,7 @@ func TestInitLanguage(t *testing.T) {
 	})
 
 	t.Run("doctor output localized by language", func(t *testing.T) {
+		t.Setenv("BFLOW_AS_CLI", "1") // doctor measures startup by running this binary
 		bundle := i18n.DefaultBundle()
 
 		// Test English doctor output
