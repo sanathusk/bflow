@@ -109,10 +109,23 @@ var catalog = map[string]base{
 //go:embed craft/*/*.md
 var craftFS embed.FS
 
-func loadCraft(name, _ string) (string, error) {
-	md, err := craftFS.ReadFile(fmt.Sprintf("craft/en/%s.md", name))
+func loadCraft(name, lang string) (string, error) {
+	path := fmt.Sprintf("craft/%s/%s.md", lang, name)
+	md, err := craftFS.ReadFile(path)
 	if err == nil {
 		return strings.TrimSpace(string(md)), nil
+	}
+	if lang != "en" {
+		md, err = craftFS.ReadFile(fmt.Sprintf("craft/en/%s.md", name))
+		if err == nil {
+			return strings.TrimSpace(string(md)), nil
+		}
+	}
+	if lang != "es" {
+		md, err = craftFS.ReadFile(fmt.Sprintf("craft/es/%s.md", name))
+		if err == nil {
+			return strings.TrimSpace(string(md)), nil
+		}
 	}
 	return "", err
 }
