@@ -31,11 +31,11 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	cfgLang := ""
+	lang := i18n.DetectLang("")
 	if cfg, err := config.Load(dir); err == nil {
-		cfgLang = cfg.UI.Lang
+		lang = cfg.Lang()
 	}
-	loc := bundle.New(i18n.DetectLang(cfgLang))
+	loc := bundle.New(lang)
 	os.Exit(cli.Run(os.Args[1:], &cli.Env{
 		Stdout:   os.Stdout,
 		Stderr:   os.Stderr,

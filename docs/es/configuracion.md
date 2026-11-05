@@ -218,4 +218,6 @@ Un valor con `/` se usa tal cual. Un alias sin equivalente en ninguno de los dos
 - `bflow ui` muestra el panel en el navegador, en una página local de solo lectura: tablero, línea del carril, métricas y todos tus repos agrupados por perfil. Con `ui: { web: true }`, la ventana también se abre al empezar una tarea; si ya hay una abierta, no abre otra.
 - Cuando la tarea espera tu decisión (una gate o un bloqueo) y Claude termina su turno, bflow manda una notificación del sistema, una vez por espera. `ui: { notify: false }` la apaga.
 
-Como son preferencias personales, `ui:` va en la config global, no en `bflow.yaml`. El primer `bflow init` en cada máquina pregunta qué abrir (panel y navegador, solo el panel o nada) y lo guarda ahí; no vuelve a preguntar, pero puedes cambiarlo editando `ui:`.
+Como `watch`, `web` y `notify` son preferencias personales, van en la config global, no en `bflow.yaml`. El primer `bflow init` en cada máquina pregunta qué abrir (panel y navegador, solo el panel o nada) y lo guarda ahí; no vuelve a preguntar, pero puedes cambiarlo editando `ui:`.
+
+`ui.lang` elige el idioma de la interfaz y de los agentes: `en` o `es`. `bflow init` lo fija en `bflow.yaml` (inglés por defecto). Un repo con `bflow.yaml` pero sin `ui.lang` es anterior a i18n: se queda en español para no cambiar de idioma al actualizar, y `bflow doctor` sugiere fijarlo; `BFLOW_LANG=en|es` lo cambia en una corrida. También puedes ponerlo en `ui:` de la config global.

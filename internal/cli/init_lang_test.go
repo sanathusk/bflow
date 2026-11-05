@@ -238,6 +238,9 @@ func TestInitLanguage(t *testing.T) {
 		if !strings.Contains(outEn, "no check steps: DONE is accepted without verification") {
 			t.Errorf("expected English tools check in doctor, got:\n%s", outEn)
 		}
+		if strings.Contains(outEn, "has no ui.lang") {
+			t.Errorf("explicit ui.lang must not warn, got:\n%s", outEn)
+		}
 
 		// Test Spanish doctor output
 		dirEs := testutil.TempDir(t)
@@ -270,6 +273,38 @@ func TestInitLanguage(t *testing.T) {
 		}
 		if !strings.Contains(outEs, "sin pasos de check: DONE se acepta sin verificar") {
 			t.Errorf("expected Spanish tools check in doctor, got:\n%s", outEs)
+		}
+		if strings.Contains(outEs, "no define ui.lang") {
+			t.Errorf("explicit ui.lang must not warn, got:\n%s", outEs)
+		}
+	})
+
+	t.Run("doctor suggests ui.lang for legacy repo", func(t *testing.T) {
+		t.Setenv("BFLOW_AS_CLI", "1")
+		bundle := i18n.DefaultBundle()
+		dir := testutil.TempDir(t)
+		if err := os.WriteFile(filepath.Join(dir, "bflow.yaml"), []byte("stack: go\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		stdout := &bytes.Buffer{}
+		env := &Env{
+			Stdout: stdout,
+			Stderr: &bytes.Buffer{},
+			Stdin:  strings.NewReader(""),
+			Dir:    dir,
+			Loc:    bundle.New("es"),
+			Build: func(d string) (*engine.Engine, error) {
+				cfg, err := config.Load(d)
+				if err != nil {
+					return nil, err
+				}
+				return &engine.Engine{Cfg: cfg, Store: store.Open(cfg.Root), Loc: bundle.New(cfg.Lang())}, nil
+			},
+		}
+		_ = Run([]string{"doctor"}, env)
+		out := stdout.String()
+		if !strings.Contains(out, "idioma") || !strings.Contains(out, "no define ui.lang") {
+			t.Errorf("expected ui.lang suggestion for legacy repo, got:\n%s", out)
 		}
 	})
 }

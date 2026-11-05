@@ -18,6 +18,10 @@ var Supported = []string{"en", "es"}
 // Default is the fallback language for new installs.
 const Default = "en"
 
+// Legacy es el idioma que bflow tenía antes de i18n. Los repos con bflow.yaml
+// anterior a ui.lang lo conservan para no cambiar de idioma al actualizar.
+const Legacy = "es"
+
 // Bundle holds all loaded translations.
 type Bundle struct {
 	langs    map[string]map[string]string
@@ -153,6 +157,21 @@ func DetectLang(cfgLang string) string {
 		}
 	}
 	return Default
+}
+
+// DetectLangForRepo resuelve el idioma de un repo. Con bflow.yaml y sin
+// ui.lang conserva Legacy aunque el locale del sistema diga otra cosa: ese
+// repo viene de antes de i18n. BFLOW_LANG (elección explícita) sigue mandando.
+func DetectLangForRepo(cfgLang string, hasRepoConfig bool) string {
+	if cfgLang == "" && hasRepoConfig {
+		if v := os.Getenv("BFLOW_LANG"); v != "" {
+			if norm := normalize(v); slices.Contains(Supported, norm) {
+				return norm
+			}
+		}
+		return Legacy
+	}
+	return DetectLang(cfgLang)
 }
 
 func normalize(tag string) string {

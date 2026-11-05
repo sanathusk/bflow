@@ -396,6 +396,12 @@ func Load(dir string) (*Config, error) {
 	return c, nil
 }
 
+// Lang resuelve el idioma activo. Un bflow.yaml sin ui.lang viene de antes de
+// i18n y se queda en español; los repos nuevos fijan ui.lang desde init.
+func (c *Config) Lang() string {
+	return i18n.DetectLangForRepo(c.UI.Lang, c.Sources.Repo != "")
+}
+
 func readGlobal(path string) (map[string]any, map[string]map[string]any, error) {
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {

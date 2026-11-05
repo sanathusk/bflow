@@ -223,6 +223,7 @@
   "check.dirty_warning": "código sin commitear: commitea y vuelve a correr para que --verify pase",
   "doctor.config_default": "sin bflow.yaml (valores por defecto; bflow init)",
   "doctor.config_profile": "%s · perfil %s",
+  "doctor.ui_lang_missing": "%s no define ui.lang: se usa %s para no cambiar el idioma de los repos existentes; agrega \"ui.lang: es\" (o \"en\") a bflow.yaml",
   "doctor.git_not_repo": "no es un repo git: sin ramas, PR ni check",
   "doctor.git_no_remote": "sin remoto %s: no hay push ni PR",
   "doctor.git_remote_base": "remoto %s · base %s",

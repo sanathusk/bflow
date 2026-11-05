@@ -553,6 +553,10 @@ func runDoctor(c *Ctx) output.Envelope {
 	}
 	add("config", "ok", "%s", src)
 
+	if cfg.Sources.Repo != "" && cfg.UI.Lang == "" {
+		add("idioma", "warn", loc.T("doctor.ui_lang_missing"), cfg.Sources.Repo, cfg.Lang())
+	}
+
 	if e.Git == nil {
 		add("git", "warn", "%s", loc.T("doctor.git_not_repo"))
 	} else if r, err := e.Git.RemoteURL(ctx); err != nil {

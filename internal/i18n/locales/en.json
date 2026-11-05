@@ -223,6 +223,7 @@
   "check.dirty_warning": "uncommitted code: commit and run again for --verify to pass",
   "doctor.config_default": "without bflow.yaml (defaults; bflow init)",
   "doctor.config_profile": "%s · profile %s",
+  "doctor.ui_lang_missing": "%s has no ui.lang: using %s so existing repos keep their language; add \"ui.lang: es\" (or \"en\") to bflow.yaml",
   "doctor.git_not_repo": "not a git repo: no branches, PRs, or check",
   "doctor.git_no_remote": "no remote %s: no push or PR",
   "doctor.git_remote_base": "remote %s · base %s",

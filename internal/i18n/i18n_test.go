@@ -93,6 +93,37 @@ func TestDetectLang(t *testing.T) {
 	}
 }
 
+func TestDetectLangForRepo(t *testing.T) {
+	tests := []struct {
+		name          string
+		cfgLang       string
+		hasRepoConfig bool
+		envs          map[string]string
+		want          string
+	}{
+		{"legacy repo keeps Spanish", "", true, nil, Legacy},
+		{"legacy repo ignores English locale", "", true, map[string]string{"LANG": "en_US.UTF-8"}, Legacy},
+		{"legacy repo ignores unsupported locale", "", true, map[string]string{"LANG": "fr_FR.UTF-8"}, Legacy},
+		{"BFLOW_LANG overrides legacy repo", "", true, map[string]string{"BFLOW_LANG": "en"}, "en"},
+		{"explicit config wins", "en", true, nil, "en"},
+		{"new repo keeps detection", "", false, nil, Default},
+		{"new repo uses system locale", "", false, map[string]string{"LANG": "es_ES.UTF-8"}, "es"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, k := range []string{"BFLOW_LANG", "LC_MESSAGES", "LC_ALL", "LANG"} {
+				t.Setenv(k, "")
+			}
+			for k, v := range tt.envs {
+				t.Setenv(k, v)
+			}
+			if got := DetectLangForRepo(tt.cfgLang, tt.hasRepoConfig); got != tt.want {
+				t.Errorf("DetectLangForRepo(%q, %v) = %q, want %q", tt.cfgLang, tt.hasRepoConfig, got, tt.want)
+			}
+		})
+	}
+}
+
 // TestLocaleKeyParity ensures every key in en.json exists in es.json and vice versa.
 func TestLocaleKeyParity(t *testing.T) {
 	b, err := Load()

@@ -218,4 +218,6 @@ Values containing `/` are used verbatim. An alias without an equivalent in eithe
 - `bflow ui` provides a read-only browser UI: kanban board, lane roadmap, metrics, and all repositories grouped by profile. With `ui: { web: true }`, the browser opens automatically upon task start; if already open, it does not open a duplicate.
 - When a task awaits a human decision (gate or blocked state) and Claude ends its turn, bflow sends a system notification once per waiting state. `ui: { notify: false }` disables this.
 
-As these represent personal preferences, `ui:` belongs in global configuration, not `bflow.yaml`. The initial `bflow init` on a machine asks what to open (terminal and browser, terminal only, or none) and persists it there. You can customize it at any time by editing `ui:`.
+As `watch`, `web`, and `notify` are personal preferences, they belong in global configuration, not `bflow.yaml`. The initial `bflow init` on a machine asks what to open (terminal and browser, terminal only, or none) and persists it there. You can customize it at any time by editing `ui:`.
+
+`ui.lang` selects the interface and agent language: `en` or `es`. `bflow init` pins it in `bflow.yaml` (English by default). A repo with `bflow.yaml` but no `ui.lang` predates i18n: it stays in Spanish so upgrading does not switch its language, and `bflow doctor` suggests pinning it; `BFLOW_LANG=en|es` overrides it for one run. You can also set it under `ui:` in global configuration.

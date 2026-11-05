@@ -34,3 +34,5 @@ flow:
   public_paths: [cmd/, internal/cli/, internal/config/config.go, internal/agents/, "!*_test.go"]
 guard:
   forbid_coauthor: true # en este repo los commits van sin coautor
+ui:
+  lang: en

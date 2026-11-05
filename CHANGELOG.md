@@ -4,6 +4,10 @@ Los cambios de bflow que ve quien lo usa. Las versiones siguen [semver](https://
 
 ## Sin publicar
 
+### Cambiado
+
+- **Los repos que ya existían siguen en español.** Un `bflow.yaml` sin `ui.lang` conserva el idioma que bflow tenía antes de i18n aunque el locale del sistema (`LANG`, `LC_*`) diga otro; en Windows, donde `LANG` suele faltar, ya no cambia a inglés al actualizar. `BFLOW_LANG` sigue sirviendo para cambiarlo. Los repos nuevos escriben `ui.lang` desde `bflow init` (inglés por defecto), y `bflow doctor` avisa y sugiere fijar `ui.lang: es` (o `en`) en `bflow.yaml`. Sin cambios de comandos ni de configuración.
+
 ## v0.1.0 (2026-10-21)
 
 ### Documentación
