@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"innobytes.tech/bflow/internal/flow"
+	"innobytes.tech/bflow/internal/i18n"
 	"innobytes.tech/bflow/internal/metrics"
 	"innobytes.tech/bflow/internal/store"
 	"innobytes.tech/bflow/internal/tracker/trackertest"
@@ -128,7 +129,12 @@ func TestDoctorModelsWarnKeepsExit(t *testing.T) {
 		t.Fatalf("doctor sin ítem veredicto-modelos: %s", raw)
 		return 0, nil
 	}
-	if _, m := item(clean); m["status"] != "ok" || !strings.Contains(fmt.Sprint(m["detail"]), "sin datos de modelos todavía") {
+	b := i18n.DefaultBundle()
+	wantNoDataEs := b.New("es").T("doctor.models_no_data")
+	wantNoDataEn := b.New("en").T("doctor.models_no_data")
+	_, m := item(clean)
+	detail := fmt.Sprint(m["detail"])
+	if m["status"] != "ok" || (!strings.Contains(detail, wantNoDataEs) && !strings.Contains(detail, wantNoDataEn)) {
 		t.Errorf("sin datos: %v", m)
 	}
 

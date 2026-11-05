@@ -573,7 +573,7 @@ func runDoctor(c *Ctx) output.Envelope {
 		if v.Verdict == "sube" {
 			status = "warn"
 		}
-		add("veredicto-modelos", status, "%s", modelVerdictLine(v))
+		add("veredicto-modelos", status, "%s", modelVerdictLine(v, loc))
 	}
 
 	var missing, optional []string
@@ -698,7 +698,7 @@ func runDoctor(c *Ctx) output.Envelope {
 		if len(procs) > 0 {
 			add("skills", "warn", loc.T("doctor.claude_process_skills"), strings.Join(procs, "; "))
 		}
-		status, detail := startupCheck(c.Agent.StartupContext(cfg.Root))
+		status, detail := startupCheck(c.Agent.StartupContext(cfg.Root), loc)
 		add("contexto", status, "%s", detail)
 		if cfg.Guard.ForbidCoauthor && !c.Agent.CoauthorOff(cfg.Root) {
 			add("agente", "warn", "%s", loc.T("doctor.claude_coauthor_conflict"))
@@ -920,7 +920,26 @@ func doctorOpenCode(c *Ctx, cfg *config.Config, add func(string, string, string,
 	}
 	for _, f := range logFs {
 		if f.Area != "modelos" {
-			add(f.Area, f.Level, "%s", f.Msg)
+			msg := f.Msg
+			if strings.HasPrefix(msg, "opencode 2.x (opencode.log): versión ") && strings.HasSuffix(msg, ", usa .opencode/plugins/bflow2/") {
+				ver := strings.TrimPrefix(msg, "opencode 2.x (opencode.log): versión ")
+				ver = strings.TrimSuffix(ver, ", usa .opencode/plugins/bflow2/")
+				msg = loc.T("doctor.opencode_log_v2", ver, ".opencode/plugins/bflow2/")
+			} else if strings.HasPrefix(msg, "opencode 2.x (opencode.log): versión ") && strings.Contains(msg, "; formato de plugin no probado") {
+				parts := strings.SplitN(msg, ";", 2)
+				ver := strings.TrimPrefix(parts[0], "opencode 2.x (opencode.log): versión ")
+				ver = strings.TrimSuffix(ver, ", usa .opencode/plugins/bflow2/")
+				msg = loc.T("doctor.opencode_log_v2", ver, ".opencode/plugins/bflow2/") + loc.T("doctor.opencode_log_future_warn")
+			} else if strings.HasPrefix(msg, "opencode: sin fallos de carga del plugin en ") {
+				dir := strings.TrimPrefix(msg, "opencode: sin fallos de carga del plugin en ")
+				msg = loc.T("doctor.opencode_log_plugin_ok", dir)
+			} else if strings.HasPrefix(msg, "opencode: no hay log en ") {
+				dir := strings.TrimPrefix(msg, "opencode: no hay log en ")
+				msg = loc.T("doctor.opencode_log_missing", dir)
+			} else if msg == "certificado autofirmado (antivirus o proxy con inspección HTTPS): define NODE_EXTRA_CA_CERTS con su CA" {
+				msg = loc.T("doctor.opencode_log_cert")
+			}
+			add(f.Area, f.Level, "%s", msg)
 		}
 	}
 	add("cobertura", "ok", "%s", loc.T("doctor.opencode_coverage"))
@@ -954,16 +973,20 @@ const (
 
 // startupCheck resume lo que se carga al iniciar cada sesión: el total, las
 // tres fuentes más pesadas y lo que conviene podar.
-func startupCheck(srcs []agents.ContextSource) (status, detail string) {
+func startupCheck(srcs []agents.ContextSource, locs ...*i18n.Localizer) (status, detail string) {
+	loc := i18n.DefaultBundle().New("es")
+	if len(locs) > 0 && locs[0] != nil {
+		loc = locs[0]
+	}
 	if len(srcs) == 0 {
-		return "ok", "sin CLAUDE.md, memoria ni skills que cargar al iniciar"
+		return "ok", loc.T("doctor.context_empty")
 	}
 	total := 0
 	var notes []string
 	for _, s := range srcs {
 		total += s.Bytes
 		if t := agents.EstimateTokens(s.Bytes); t > fileBudget && s.Note == "" {
-			s.Note = fmt.Sprintf("≈%s tokens, más de %s en un solo archivo", metrics.Human(int64(t)), metrics.Human(fileBudget))
+			s.Note = loc.T("doctor.context_file_over_budget", metrics.Human(int64(t)), metrics.Human(fileBudget))
 		}
 		if s.Note != "" {
 			notes = append(notes, s.Label+" "+s.Note)
@@ -973,17 +996,21 @@ func startupCheck(srcs []agents.ContextSource) (status, detail string) {
 	slices.SortStableFunc(top, func(a, b agents.ContextSource) int { return b.Bytes - a.Bytes })
 	var parts []string
 	for _, s := range top[:min(3, len(top))] {
-		parts = append(parts, fmt.Sprintf("%s ≈%s", s.Label, metrics.Human(int64(agents.EstimateTokens(s.Bytes)))))
+		lbl := s.Label
+		if lbl == "descripciones de skills y agentes" {
+			lbl = loc.T("doctor.context_label_skills_agents")
+		}
+		parts = append(parts, fmt.Sprintf("%s ≈%s", lbl, metrics.Human(int64(agents.EstimateTokens(s.Bytes)))))
 	}
 	tok := agents.EstimateTokens(total)
-	detail = fmt.Sprintf("≈%s tokens de archivos en cada llamada de la sesión principal (%s)", metrics.Human(int64(tok)), strings.Join(parts, ", "))
+	detail = loc.T("doctor.context_detail", metrics.Human(int64(tok)), strings.Join(parts, ", "))
 	if tok > startupBudget {
-		notes = append(notes, "el total pasa de "+metrics.Human(startupBudget))
+		notes = append(notes, loc.T("doctor.context_total_over_budget", metrics.Human(startupBudget)))
 	}
 	if len(notes) == 0 {
 		return "ok", detail
 	}
-	return "warn", detail + ". " + strings.Join(notes, "; ") + ". Poda lo que ya no aplica o muévelo a archivos que se lean al necesitarlos"
+	return "warn", detail + ". " + strings.Join(notes, "; ") + loc.T("doctor.context_warn_advice")
 }
 
 // checkRepo confirma que el token ve el repositorio, en los hosts que saben

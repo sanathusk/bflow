@@ -16,6 +16,7 @@ import (
 	"innobytes.tech/bflow/internal/config"
 	"innobytes.tech/bflow/internal/engine"
 	"innobytes.tech/bflow/internal/flow"
+	"innobytes.tech/bflow/internal/i18n"
 	"innobytes.tech/bflow/internal/metrics"
 	"innobytes.tech/bflow/internal/output"
 	"innobytes.tech/bflow/internal/store"
@@ -538,24 +539,32 @@ func addTokens(e *engine.Engine, id, tool, run string, samples []metrics.Sample,
 }
 
 // modelVerdictLine es la línea sin color del veredicto de modelos (stats y doctor).
-func modelVerdictLine(v metrics.ModelVerdict) string {
+func modelVerdictLine(v metrics.ModelVerdict, locs ...*i18n.Localizer) string {
+	loc := i18n.DefaultBundle().New("es")
+	if len(locs) > 0 && locs[0] != nil {
+		loc = locs[0]
+	}
 	switch v.Verdict {
 	case "sin_datos":
-		return "sin datos de modelos todavía"
+		return loc.T("doctor.models_no_data")
 	case "sube":
-		return "sube · " + strings.Join(v.Rose, " · ") + " · " + modelCounts(v)
+		return loc.T("doctor.models_rises", strings.Join(v.Rose, " · "), modelCounts(v, loc))
 	case "sin_regresion":
-		return "sin regresión · " + modelCounts(v)
+		return loc.T("doctor.models_no_regression", modelCounts(v, loc))
 	}
-	return "sin veredicto · " + modelCounts(v)
+	return loc.T("doctor.models_no_verdict", modelCounts(v, loc))
 }
 
-func modelCounts(v metrics.ModelVerdict) string {
+func modelCounts(v metrics.ModelVerdict, locs ...*i18n.Localizer) string {
+	loc := i18n.DefaultBundle().New("es")
+	if len(locs) > 0 && locs[0] != nil {
+		loc = locs[0]
+	}
 	before := 0
 	if v.Previous != nil {
 		before = len(v.Previous.Tasks)
 	}
-	return fmt.Sprintf("después %d/%d · antes %d/%d", len(v.Current.Tasks), metrics.ModelWindow, before, metrics.ModelWindow)
+	return loc.T("doctor.models_counts", len(v.Current.Tasks), metrics.ModelWindow, before, metrics.ModelWindow)
 }
 
 // renderModelVerdict da la línea (y las de vuelta) del veredicto de modelos. El

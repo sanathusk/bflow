@@ -11,6 +11,7 @@ import (
 	"innobytes.tech/bflow/internal/engine"
 	"innobytes.tech/bflow/internal/flow"
 	"innobytes.tech/bflow/internal/guard"
+	"innobytes.tech/bflow/internal/i18n"
 	"innobytes.tech/bflow/internal/metrics"
 	"innobytes.tech/bflow/internal/review"
 	"innobytes.tech/bflow/internal/store"
@@ -204,10 +205,8 @@ func TestStatsReviewCoverage(t *testing.T) {
 // R18: doctor avisa si el guard de Claude no ve Read.
 func TestDoctorWarnsGuardWithoutReads(t *testing.T) {
 	setHome(t)
-	const (
-		warnEs = "claude: el guard no ve Read; la cobertura del reviewer no se mide (corre bflow install claude)"
-		warnEn = "claude: guard does not see Read; reviewer coverage is not measured (run bflow install claude)"
-	)
+	warnEs := i18n.DefaultBundle().New("es").T("doctor.claude_guard_no_reads")
+	warnEn := i18n.DefaultBundle().New("en").T("doctor.claude_guard_no_reads")
 	hooks := func(guardCmd string) string {
 		return `{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"bflow hook session-start"}]}],` +
 			`"PreToolUse":[{"matcher":"Bash|Edit|Write|MultiEdit|NotebookEdit","hooks":[{"type":"command","command":"` + guardCmd + `"}]}],` +

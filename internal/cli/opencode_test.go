@@ -265,7 +265,7 @@ func TestInstallOpenCode(t *testing.T) {
 		if code != 0 || out["code"] != "installed" || dataOf(out)["render"] != false {
 			t.Fatalf("%d %s", code, raw)
 		}
-		if w := warningsOf(out); !strings.Contains(w, "por repo") {
+		if w := warningsOf(out); !strings.Contains(w, "por repo") && !strings.Contains(w, "per repo") {
 			t.Errorf("avisa que los agentes se generan por repo: %q", w)
 		}
 		if exists(env, ".opencode") {
