@@ -13,7 +13,6 @@ import (
 	"innobytes.tech/bflow/internal/adapters/agent/opencode"
 	gitad "innobytes.tech/bflow/internal/adapters/vcs/git"
 	"innobytes.tech/bflow/internal/cli"
-	"innobytes.tech/bflow/internal/config"
 	"innobytes.tech/bflow/internal/eval"
 	"innobytes.tech/bflow/internal/i18n"
 )
@@ -31,11 +30,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	lang := i18n.DetectLang("")
-	if cfg, err := config.Load(dir); err == nil {
-		lang = cfg.Lang()
-	}
-	loc := bundle.New(lang)
+	loc := bundle.New(i18n.DetectLang(""))
 	os.Exit(cli.Run(os.Args[1:], &cli.Env{
 		Stdout:   os.Stdout,
 		Stderr:   os.Stderr,

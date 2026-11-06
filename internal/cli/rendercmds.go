@@ -70,14 +70,18 @@ func planRender(c *Ctx, cfg *config.Config) (*renderPlan, error) {
 	if len(c.tools()) == 0 {
 		return nil, errors.New("no hay adaptador de agente")
 	}
+	loc := i18n.DefaultBundle().New(cfg.Lang())
+	if c.Env != nil {
+		c.Env.Loc = loc
+	}
 	fc := cfg.Flow.Core()
-	fc.Loc = c.Env.Loc
+	fc.Loc = loc
 	specs, err := agents.Build(fc, cfg.Agents, cfg.Root)
 	if err != nil {
 		return nil, err
 	}
 	if st, err := os.Stat(filepath.Join(cfg.Root, filepath.FromSlash(eval.CasesDir))); err == nil && st.IsDir() {
-		specs = append(specs, agents.EvalReviewerSpec(cfg.Agents["reviewer"], c.Env.Loc))
+		specs = append(specs, agents.EvalReviewerSpec(cfg.Agents["reviewer"], loc))
 	}
 	files := map[string][]byte{}
 	p := &renderPlan{Files: files, Unresolved: map[string][]agents.Unresolved{}}
