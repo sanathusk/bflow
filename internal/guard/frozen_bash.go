@@ -1,7 +1,6 @@
 package guard
 
 import (
-	"fmt"
 	"io"
 	"os"
 	"path"
@@ -17,10 +16,10 @@ import (
 
 const frozenReason = "%s quedó congelada al aprobar el contrato. Si la prueba está mal, reporta NEEDS_DECISION con el cambio que necesitas; si una persona lo aprueba y corre `bflow freeze --allow %s`, podrás cambiarla una vez."
 
-func frozenBashReason(p string, read bool) string {
-	r := fmt.Sprintf(frozenReason, p, p)
+func frozenBashReason(c Context, p string, read bool) string {
+	r := c.t("guard.frozen_bash_reason", p, p)
 	if read {
-		r += " Para leerla usa cat o grep."
+		r += c.t("guard.frozen_bash_read_hint")
 	}
 	return r
 }

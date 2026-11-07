@@ -124,12 +124,13 @@ func init() {
 			fs.String("fixes", "", "hotfix: ID de la feature que corrige")
 		},
 		Run: func(c *Ctx) output.Envelope {
+			loc := envLoc(c.Env)
 			if len(c.Args) == 0 {
-				return output.Fail("usage", errors.New("uso: bflow start <ID> --lane full|light|hotfix"))
+				return output.FailLoc(loc, "usage", errors.New(loc.T("cli.usage_start")))
 			}
 			lane := str(c.Flags, "lane")
 			if lane == "" {
-				return output.Fail("usage", errors.New("falta --lane (full, light o hotfix); bflow status <ID> muestra las opciones"))
+				return output.FailLoc(loc, "usage", errors.New(loc.T("cli.missing_lane")))
 			}
 			return flowCommand(func(ctx context.Context, e *engine.Engine, id string, c *Ctx, _ []string) (engine.Outcome, error) {
 				o, err := e.Start(ctx, id, flow.Lane(lane), str(c.Flags, "slug"), str(c.Flags, "fixes"))
@@ -148,9 +149,10 @@ func init() {
 			fs.String("slug", "", "slug para rama y carpeta del spec")
 		},
 		Run: func(c *Ctx) output.Envelope {
+			loc := envLoc(c.Env)
 			lane, title := strings.TrimSpace(str(c.Flags, "lane")), strings.TrimSpace(str(c.Flags, "title"))
 			if lane == "" || title == "" {
-				return output.Fail("usage", errors.New(`uso: bflow new --lane full|light|hotfix --title "título" [--file idea.md]`))
+				return output.FailLoc(loc, "usage", errors.New(loc.T("cli.usage_new")))
 			}
 			e, err := engineFor(c)
 			if err != nil {
@@ -197,7 +199,7 @@ func init() {
 			env := output.OK("task_list", map[string]any{"tasks": rows}, nil)
 			env.Text = strings.Join(lines, "\n")
 			if len(lines) == 0 {
-				env.Text = "bflow: sin tareas abiertas"
+				env.Text = envLoc(c.Env).T("cli.no_open_tasks")
 			}
 			return env
 		}})
@@ -301,7 +303,8 @@ func init() {
 		Setup: func(fs *flag.FlagSet) { fs.String("note", "", "motivo") },
 		Run: func(c *Ctx) output.Envelope {
 			if len(c.Args) == 0 {
-				return output.Fail("usage", errors.New("drop necesita el ID de la tarea: bflow drop <ID> --note \"motivo\""))
+				loc := envLoc(c.Env)
+				return output.FailLoc(loc, "usage", errors.New(loc.T("cli.usage_drop")))
 			}
 			e, err := engineFor(c)
 			if err != nil {
@@ -371,7 +374,8 @@ func init() {
 				return fail(err)
 			}
 			if len(rest) == 0 {
-				return output.Fail("usage", errors.New("uso: bflow show [ID] task|brief|spec|contract|review-map|questions|decisions|discovery|check|scout"))
+				loc := envLoc(c.Env)
+				return output.FailLoc(loc, "usage", errors.New(loc.T("cli.usage_show")))
 			}
 			text, err := e.Show(ctx, id, rest[0], str(c.Flags, "section"))
 			if err != nil {
@@ -390,7 +394,8 @@ func init() {
 		Run: func(c *Ctx) output.Envelope {
 			title := strings.TrimSpace(strings.Join(c.Args, " "))
 			if title == "" {
-				return output.Fail("usage", errors.New(`uso: bflow task add "título"`))
+				loc := envLoc(c.Env)
+				return output.FailLoc(loc, "usage", errors.New(loc.T("cli.usage_task_add")))
 			}
 			e, err := engineFor(c)
 			if err != nil {
@@ -490,9 +495,9 @@ func runStatus(c *Ctx) output.Envelope {
 		}
 		lines = append(lines, l)
 	}
-	text := "bflow: sin tareas en curso"
+	text := envLoc(c.Env).T("cli.no_tasks_in_progress")
 	if len(lines) > 0 {
-		text = "bflow: " + fmt.Sprint(len(lines)) + " tareas en curso (indica el ID)\n  " + strings.Join(lines, "\n  ")
+		text = envLoc(c.Env).T("cli.tasks_in_progress_pick", len(lines), strings.Join(lines, "\n  "))
 	}
 	if len(views) == 0 {
 		next := flow.IntakeNext(e.Cfg.Flow.Core())
@@ -517,9 +522,9 @@ func viewEnvelope(v engine.View, brief bool, loc *i18n.Localizer) output.Envelop
 			l += " · gate " + v.Gate
 		}
 		if v.Pending > 0 {
-			l += fmt.Sprintf(" · %d sin sincronizar", v.Pending)
+			l += " · " + loc.T("render.unsynced_count", v.Pending)
 		}
-		l += " · siguiente: " + next.Action
+		l += " · " + loc.T("init.next_label") + " " + next.Action
 		if next.Action == output.ActionSpawn && len(next.Agents) > 0 {
 			var as []string
 			for _, a := range next.Agents {
@@ -550,7 +555,8 @@ func init() {
 		},
 		Run: func(c *Ctx) output.Envelope {
 			if str(c.Flags, "from") != "harness" {
-				return output.Fail("usage", errors.New("solo se importa --from harness"))
+				loc := envLoc(c.Env)
+				return output.FailLoc(loc, "usage", errors.New(loc.T("cli.usage_import")))
 			}
 			e, err := engineFor(c)
 			if err != nil {

@@ -258,7 +258,7 @@ func TestGuardPostAdvice(t *testing.T) {
 	env, _, _, _ := tokensEnv(t, false)
 	withQuick(t, env)
 	code, _, errOut := hookRun(t, env, adviceIn(env, "go test ./...", "s1"), "guard", "--post")
-	if code != 2 || !strings.Contains(errOut, "bflow guard:") || !strings.Contains(errOut, "bflow check --quick <paquete>") || !strings.Contains(errOut, "sí corrió") {
+	if code != 2 || !strings.Contains(errOut, "bflow guard:") || !strings.Contains(errOut, "bflow check --quick") || (!strings.Contains(errOut, "sí corrió") && !strings.Contains(errOut, "ran")) {
 		t.Fatalf("claude: %d %q", code, errOut)
 	}
 	code, _, errOut = hookRun(t, env, guardIn(env, "bash", map[string]any{"command": "npm test"}, false, ""), "guard", "--tool", "opencode", "--post")

@@ -49,7 +49,7 @@ func TestGuardLoopDeniesSubagent(t *testing.T) {
 		}
 	}
 	code, _, errOut := hookRun(t, env, in, "guard")
-	if code != 2 || !strings.Contains(errOut, "ciclo") {
+	if code != 2 || (!strings.Contains(errOut, "ciclo") && !strings.Contains(errOut, "loop")) {
 		t.Fatalf("3ra repetición idéntica debía rechazarse: %d %q", code, errOut)
 	}
 }

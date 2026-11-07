@@ -132,7 +132,7 @@ func runGuard(c *Ctx) output.Envelope {
 	// Las acciones se evalúan en orden: la primera rechazada da el registro y el motivo.
 	for _, a := range acts {
 		gc := guardContext(cfg)
-		gc.Loc = c.Env.Loc
+		gc.Loc = envLoc(c.Env)
 		if needsTask(a, cfg) && c.Build != nil {
 			if e, err := c.Build(cfg.Root); err == nil {
 				if id, err := e.Active(context.Background()); err == nil {
@@ -372,7 +372,8 @@ func checkLoop(c *Ctx, cfg *config.Config, acts []guard.Action) (guard.Decision,
 	if !deny {
 		return guard.Decision{}, false
 	}
-	d := deny2("loop", "repetiste la misma acción (%s) %d veces en esta corrida: estás en un ciclo. Cambia de enfoque o reporta BLOCKED con lo que te falta.", a.Tool, n)
+	loc := envLoc(c.Env)
+	d := guard.Decision{Allow: false, Rule: "loop", Reason: loc.T("guard.loop_denied", a.Tool, n)}
 	logGuard(c, cfg.Root, "loop", *a, map[string]any{"tool": a.Tool, "repeats": n})
 	return d, true
 }
@@ -419,7 +420,8 @@ func runGuardPost(c *Ctx, cfg *config.Config, acts []guard.Action) output.Envelo
 		return allowed
 	}
 	if r := restoreFrozenPost(c, cfg); !r.Empty() {
-		reason := engine.FrozenRestoreReason(r)
+		loc := envLoc(c.Env)
+		reason := engine.FrozenRestoreReason(r, loc)
 		fmt.Fprintln(c.Stderr, "bflow guard: "+reason)
 		logGuard(c, cfg.Root, "frozen_test", *bash)
 		env := output.Rejected("frozen_test", reason)
@@ -430,7 +432,8 @@ func runGuardPost(c *Ctx, cfg *config.Config, acts []guard.Action) output.Envelo
 	if len(cfg.Check.Quick) == 0 {
 		return allowed
 	}
-	advice := guard.Advise(*bash)
+	loc := envLoc(c.Env)
+	advice := guard.Advise(*bash, loc)
 	if advice == "" || !markAdvice(cfg, bash.Session) {
 		return allowed
 	}
@@ -562,14 +565,17 @@ func runSessionStart(c *Ctx) output.Envelope {
 			next = &n
 		}
 	} else if views, err := e.Views(ctx); err == nil && len(views) > 1 {
-		lines = append(lines, fmt.Sprintf("bflow: %d tareas en curso: %s (bflow status <ID>)", len(views), strings.Join(engine.SortedIDs(views), ", ")))
+		loc := envLoc(c.Env)
+		lines = append(lines, loc.T("cli.tasks_in_progress_count", len(views), strings.Join(engine.SortedIDs(views), ", ")))
 	}
 	if len(lines) == 0 {
-		lines = append(lines, "bflow: sin tareas en curso")
+		loc := envLoc(c.Env)
+		lines = append(lines, loc.T("cli.no_tasks_in_progress"))
 	}
 	if next != nil {
-		if c := compactNext(*next); c != "" {
-			lines = append(lines, "next: "+c, "Sigue con /bflow.")
+		if cmp := compactNext(*next); cmp != "" {
+			loc := envLoc(c.Env)
+			lines = append(lines, "next: "+cmp, loc.T("cli.continue_with_bflow"))
 		}
 	}
 	env := output.OK("session", data, next)

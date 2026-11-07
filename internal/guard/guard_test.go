@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"innobytes.tech/bflow/internal/flow"
+	"innobytes.tech/bflow/internal/i18n"
 	"innobytes.tech/bflow/internal/testutil"
 )
 
@@ -235,7 +236,7 @@ func TestHumanOnlySubagent(t *testing.T) {
 		if d.Allow || d.Rule != "human_only" {
 			t.Errorf("subagente %q → allow=%v rule=%q", cmd, d.Allow, d.Rule)
 		}
-		if !strings.Contains(d.Reason, name) || !strings.Contains(d.Reason, "bflow report") || !strings.Contains(d.Reason, "persona") {
+		if !strings.Contains(d.Reason, name) || !strings.Contains(d.Reason, "bflow report") || (!strings.Contains(d.Reason, "persona") && !strings.Contains(d.Reason, "human decision")) {
 			t.Errorf("motivo de %s: %q", name, d.Reason)
 		}
 		if d := Evaluate(main(cmd), active); !d.Allow {
@@ -629,10 +630,10 @@ func TestBashFrozenReason(t *testing.T) {
 	}
 	r6 := Evaluate(bashCmd(`python -c "open('internal/b_test.go','w')"`), c)
 	if r6.Allow || !strings.HasPrefix(r6.Reason, strings.ReplaceAll(edit.Reason, "internal/a_test.go", "internal/b_test.go")) ||
-		!strings.Contains(r6.Reason, "cat o grep") {
+		(!strings.Contains(r6.Reason, "cat o grep") && !strings.Contains(r6.Reason, "cat or grep")) {
 		t.Errorf("R6 suma cómo leerla: %+v", r6)
 	}
-	if strings.Contains(d.Reason, "cat o grep") {
+	if strings.Contains(d.Reason, "cat o grep") || strings.Contains(d.Reason, "cat or grep") {
 		t.Errorf("solo R6 habla de leer: %s", d.Reason)
 	}
 }
@@ -711,5 +712,47 @@ func TestGitAddEvalsAllowed(t *testing.T) {
 		if d.Allow != tc.allow || (!tc.allow && d.Rule != "bflow_tracked") {
 			t.Errorf("%q → allow=%v rule=%q, want allow=%v", tc.cmd, d.Allow, d.Rule, tc.allow)
 		}
+	}
+}
+
+func TestGuardLocalization(t *testing.T) {
+	b, err := i18n.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cEn := Context{Loc: b.New("en")}
+	cEs := Context{Loc: b.New("es")}
+
+	// git destructive hard
+	actHard := Action{Tool: Bash, Command: "git reset --hard"}
+	dEn := Evaluate(actHard, cEn)
+	if !strings.Contains(dEn.Reason, "discards work with no way to recover") {
+		t.Errorf("expected English denial, got: %s", dEn.Reason)
+	}
+	dEs := Evaluate(actHard, cEs)
+	if !strings.Contains(dEs.Reason, "descarta trabajo sin forma de recuperarlo") {
+		t.Errorf("expected Spanish denial, got: %s", dEs.Reason)
+	}
+
+	// human only freeze
+	actFreeze := Action{Tool: Bash, Command: "bflow freeze"}
+	dEn = Evaluate(actFreeze, cEn)
+	if !strings.Contains(dEn.Reason, "accepts changes to frozen tests: run by a person") {
+		t.Errorf("expected English denial, got: %s", dEn.Reason)
+	}
+	dEs = Evaluate(actFreeze, cEs)
+	if !strings.Contains(dEs.Reason, "acepta cambios a pruebas congeladas: lo corre una persona") {
+		t.Errorf("expected Spanish denial, got: %s", dEs.Reason)
+	}
+
+	// env file
+	actEnv := Action{Tool: Edit, Path: ".env"}
+	dEn = Evaluate(actEnv, cEn)
+	if !strings.Contains(dEn.Reason, "may contain secrets: cannot be edited") {
+		t.Errorf("expected English denial, got: %s", dEn.Reason)
+	}
+	dEs = Evaluate(actEnv, cEs)
+	if !strings.Contains(dEs.Reason, "puede tener secretos: no se edita") {
+		t.Errorf("expected Spanish denial, got: %s", dEs.Reason)
 	}
 }

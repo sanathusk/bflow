@@ -15,6 +15,7 @@ import (
 
 	"innobytes.tech/bflow/internal/flow"
 	"innobytes.tech/bflow/internal/guard"
+	"innobytes.tech/bflow/internal/i18n"
 	"innobytes.tech/bflow/internal/store"
 )
 
@@ -286,14 +287,17 @@ func (e *Engine) RestoreFrozen(id string) FrozenRestore {
 }
 
 // FrozenRestoreReason es el aviso al agente tras restaurar (o no poder).
-func FrozenRestoreReason(r FrozenRestore) string {
+func FrozenRestoreReason(r FrozenRestore, locs ...*i18n.Localizer) string {
+	loc := i18n.DefaultLocalizer()
+	if len(locs) > 0 && locs[0] != nil {
+		loc = locs[0]
+	}
 	var parts []string
 	if ch := slices.Concat(r.Restored, r.Deleted); len(ch) > 0 {
-		parts = append(parts, strings.Join(ch, ", ")+" son pruebas congeladas y el último comando las cambió: bflow las restauró (o borró, si no existían al congelar). "+
-			"No las cambies; si una prueba está mal, reporta NEEDS_DECISION. Si una persona aprueba el cambio, que corra bflow freeze --allow <archivo> desde su terminal.")
+		parts = append(parts, loc.T("engine.frozen_restore_changed", strings.Join(ch, ", ")))
 	}
 	if len(r.Missing) > 0 {
-		parts = append(parts, "no hay copia para restaurar "+strings.Join(r.Missing, ", ")+": déjalos como estaban (git diff) antes de reportar DONE.")
+		parts = append(parts, loc.T("engine.frozen_restore_missing", strings.Join(r.Missing, ", ")))
 	}
 	return strings.Join(parts, " ")
 }

@@ -63,7 +63,7 @@ func TestGuardHook(t *testing.T) {
 	r.ok("approve", id)
 	edit := preToolUse(r.dir, "Edit", map[string]any{"file_path": filepath.Join(r.dir, "internal", "cas_test.go"), "old_string": "a", "new_string": "b"})
 	_, errOut, code = r.hook(edit, "guard")
-	if code != 2 || !strings.Contains(errOut, "congelada") {
+	if code != 2 || (!strings.Contains(errOut, "congelada") && !strings.Contains(errOut, "frozen")) {
 		t.Fatalf("prueba congelada: %d %q", code, errOut)
 	}
 	_, _, code = r.hook(preToolUse(r.dir, "Edit", map[string]any{"file_path": filepath.Join(r.dir, "internal", "cas.go")}), "guard")
@@ -71,7 +71,7 @@ func TestGuardHook(t *testing.T) {
 		t.Errorf("el código sí se edita: %d", code)
 	}
 	_, errOut, code = r.hook(preToolUse(r.dir, "Bash", map[string]any{"command": "git checkout -b mi-rama"}), "guard")
-	if code != 2 || !strings.Contains(errOut, "la rama de la tarea la crea bflow") {
+	if code != 2 || (!strings.Contains(errOut, "la rama de la tarea la crea bflow") && !strings.Contains(errOut, "task branch is created by bflow")) {
 		t.Errorf("con tarea en curso la rama la crea bflow: %d %q", code, errOut)
 	}
 

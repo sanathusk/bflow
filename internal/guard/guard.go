@@ -7,7 +7,6 @@ package guard
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -84,8 +83,15 @@ type Decision struct {
 
 var allow = Decision{Allow: true}
 
-func deny(rule, format string, a ...any) Decision {
-	return Decision{Rule: rule, Reason: fmt.Sprintf(format, a...)}
+func (c Context) t(key string, a ...any) string {
+	if c.Loc != nil {
+		return c.Loc.T(key, a...)
+	}
+	return i18n.T(key, a...)
+}
+
+func deny(c Context, rule, key string, a ...any) Decision {
+	return Decision{Rule: rule, Reason: c.t(key, a...)}
 }
 
 // frozenPhases son las fases en las que las pruebas del contrato no se tocan.
@@ -454,27 +460,27 @@ func bash(a Action, c Context) Decision {
 		sub := BflowSubcommand(s)
 		switch {
 		case resetHard.MatchString(s), cleanForce.MatchString(s), checkoutDash.MatchString(s), stashDrop.MatchString(s):
-			return deny("git_destructive", "`%s` descarta trabajo sin forma de recuperarlo. Si necesitas deshacer algo, haz un commit que lo revierta o pregunta.", s)
+			return deny(c, "git_destructive", "guard.git_destructive_hard", s)
 		case restore.MatchString(s) && !strings.Contains(s, "--staged"):
-			return deny("git_destructive", "`%s` descarta cambios del árbol de trabajo. Para quitar algo del stage usa git restore --staged.", s)
+			return deny(c, "git_destructive", "guard.git_destructive_stage", s)
 		case sub == "freeze":
-			return deny("human_only", "bflow freeze acepta cambios a pruebas congeladas: lo corre una persona desde su terminal. Si una prueba está mal, reporta NEEDS_DECISION.")
+			return deny(c, "human_only", "guard.human_only_freeze")
 		case a.Subagent && slices.Contains(HumanOnly, sub):
-			return deny("human_only", "`bflow %s` responde una decisión de una persona: lo corre la sesión principal después de preguntarle. Termina tu parte con `bflow report` (o NEEDS_DECISION).", sub)
+			return deny(c, "human_only", "guard.human_only_cmd", sub)
 		case c.Phase != "" && ghPRCreate.MatchString(s):
-			return deny("bflow_pr", "el PR lo abre bflow al aprobar el walkthrough, con el review-map y el walkthrough; para actualizarlo usa bflow pr.")
+			return deny(c, "bflow_pr", "guard.bflow_pr")
 		case c.Phase != "" && (checkoutNew.MatchString(s) || switchNew.MatchString(s) || branchNew.MatchString(s)):
-			return deny("bflow_branch", "la rama de la tarea la crea bflow (al aprobar el spec o al empezar un hotfix); sigue el next de bflow status.")
+			return deny(c, "bflow_branch", "guard.bflow_branch")
 		}
 		if m := pushRe.FindStringSubmatch(s); m != nil {
 			args := m[2]
 			if forceRe.MatchString(args) || plusRefspec(args) {
-				return deny("force_push", "push forzado prohibido: reescribe historia compartida.")
+				return deny(c, "force_push", "guard.force_push")
 			}
 			for _, f := range strings.Fields(args) {
 				target := strings.TrimPrefix(f[strings.LastIndex(f, ":")+1:], "+")
 				if slices.Contains(c.Protected, target) {
-					return deny("protected_branch", "no se empuja a %s: los cambios llegan por PR (bflow pr).", target)
+					return deny(c, "protected_branch", "guard.protected_branch", target)
 				}
 			}
 		}
@@ -492,34 +498,34 @@ func bash(a Action, c Context) Decision {
 				}
 			}
 			if bad {
-				return deny("bflow_tracked", "`%s` metería archivos que git ignora: lo de .bflow/ (walkthrough, reportes) se queda fuera del repo; bflow commitea la spec. Agrega solo código, docs y el changelog para consumidores, sin -f.", s)
+				return deny(c, "bflow_tracked", "guard.bflow_tracked", s)
 			}
 		}
 		if commitRe.MatchString(s) {
 			if c.ForbidCoauthor && coauthorRe.MatchString(s) {
-				return deny("coauthor", "este repo no usa el trailer Co-Authored-By en los commits.")
+				return deny(c, "coauthor", "guard.coauthor")
 			}
 			if c.MaxDiffLines > 0 && c.DiffLines != nil {
 				if n, err := c.DiffLines(); err == nil && n > c.MaxDiffLines {
-					return deny("diff_size", "el diff de la tarea suma %d líneas y el máximo es %d: divide el cambio o pide NEEDS_DECISION.", n, c.MaxDiffLines)
+					return deny(c, "diff_size", "guard.diff_size", n, c.MaxDiffLines)
 				}
 			}
 		}
 		if m := rmRe.FindString(s); m != "" && isFrozenPhase(c) {
 			for _, f := range strings.Fields(s)[1:] {
 				if slices.Contains(c.Frozen, rel(c.Root, f)) {
-					return deny("frozen_test", "%s es una prueba congelada al aprobar el contrato: no se borra ni se mueve.", f)
+					return deny(c, "frozen_test", "guard.frozen_test", f)
 				}
 			}
 		}
 	}
 	if isFrozenPhase(c) {
 		if p, read := heredocsAll(a.Command, c, 0); p != "" {
-			return deny("frozen_test", "%s", frozenBashReason(p, read))
+			return Decision{Rule: "frozen_test", Reason: frozenBashReason(c, p, read)}
 		}
 		for _, s := range Segments(a.Command) {
 			if p, read := frozenWrite(s, c); p != "" {
-				return deny("frozen_test", "%s", frozenBashReason(p, read))
+				return Decision{Rule: "frozen_test", Reason: frozenBashReason(c, p, read)}
 			}
 		}
 	}
@@ -530,20 +536,20 @@ func edit(a Action, c Context) Decision {
 	p := rel(c.Root, a.Path)
 	base := filepath.Base(p)
 	if (base == ".env" || strings.HasPrefix(base, ".env.")) && base != ".env.example" {
-		return deny("env_file", "%s puede tener secretos: no se edita desde un agente.", p)
+		return deny(c, "env_file", "guard.env_file", p)
 	}
 	if (p == ".bflow" || strings.HasPrefix(p, ".bflow/")) && !agentArtifact(p) && !evalOutArtifact(p) {
-		return deny("bflow_state", "%s es estado de bflow: cámbialo con sus comandos (report, approve, block…), no a mano. Los agentes solo escriben %s en .bflow/tasks/<ID>/.",
+		return deny(c, "bflow_state", "guard.bflow_state",
 			p, strings.Join(flow.AgentArtifacts, ", "))
 	}
 	if slices.Contains(c.HumanFiles, p) {
-		return deny("human_file", "%s guarda las vulnerabilidades aceptadas: lo edita una persona. Si hace falta aceptar una, reporta NEEDS_DECISION.", p)
+		return deny(c, "human_file", "guard.human_file", p)
 	}
 	if isFrozenPhase(c) && slices.Contains(c.Frozen, p) {
-		return deny("frozen_test", "%s", frozenBashReason(p, false))
+		return Decision{Rule: "frozen_test", Reason: frozenBashReason(c, p, false)}
 	}
 	if c.StrictLeader && !a.Subagent && underAny(p, c.ProtectedPaths) {
-		return deny("leader_code", "la sesión principal no edita %s: eso lo hace el implementer.", p)
+		return deny(c, "leader_code", "guard.leader_code", p)
 	}
 	return allow
 }
@@ -738,9 +744,9 @@ func protectedWrite(s string, c Context) Decision {
 	for _, t := range targets {
 		p := rel(c.Root, t)
 		if b := filepath.Base(p); strings.HasPrefix(b, ".env") && strings.ContainsAny(b, "*?[") {
-			return deny("env_file", "%s puede tener secretos: no se edita desde un agente.", p)
+			return deny(c, "env_file", "guard.env_file", p)
 		}
-		if d := edit(Action{Tool: Write, Path: t, Subagent: true}, Context{Root: c.Root}); !d.Allow {
+		if d := edit(Action{Tool: Write, Path: t, Subagent: true}, Context{Root: c.Root, Loc: c.Loc}); !d.Allow {
 			return d
 		}
 	}

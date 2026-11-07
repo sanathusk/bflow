@@ -38,13 +38,13 @@ func TestStatusWithoutTasksAsksIntake(t *testing.T) {
 
 	env.Stdout = &bytes.Buffer{}
 	Run([]string{"status"}, env)
-	if got := env.Stdout.(*bytes.Buffer).String(); !strings.Contains(got, "sin tareas en curso") || (!strings.Contains(got, "¿Creamos una tarea nueva") && !strings.Contains(got, "Create a new task")) {
+	if got := env.Stdout.(*bytes.Buffer).String(); (!strings.Contains(got, "sin tareas en curso") && !strings.Contains(got, "no tasks in progress")) || (!strings.Contains(got, "¿Creamos una tarea nueva") && !strings.Contains(got, "Create a new task")) {
 		t.Errorf("texto: %q", got)
 	}
 
 	env.Stdout = &bytes.Buffer{}
 	Run([]string{"status", "--brief"}, env)
-	if got := env.Stdout.(*bytes.Buffer).String(); strings.TrimSpace(got) != "bflow: sin tareas en curso" {
+	if got := strings.TrimSpace(env.Stdout.(*bytes.Buffer).String()); got != "bflow: sin tareas en curso" && got != "bflow: no tasks in progress" {
 		t.Errorf("--brief no cambia el texto: %q", got)
 	}
 

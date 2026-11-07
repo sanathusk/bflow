@@ -3,14 +3,20 @@ package guard
 import (
 	"slices"
 	"strings"
+
+	"innobytes.tech/bflow/internal/i18n"
 )
 
 // Advise devuelve el aviso que sugiere `bflow check --quick` cuando a es un
 // Bash que corre la prueba del stack directo (GH-17), o "" si no aplica. Mira el
 // ejecutable al inicio de cada segmento, no subcadenas: `echo go test` no cuenta.
-func Advise(a Action) string {
+func Advise(a Action, locs ...*i18n.Localizer) string {
 	if a.Tool != Bash {
 		return ""
+	}
+	loc := i18n.DefaultLocalizer()
+	if len(locs) > 0 && locs[0] != nil {
+		loc = locs[0]
 	}
 	for _, s := range Segments(a.Command) {
 		if BflowSubcommand(s) != "" {
@@ -20,7 +26,7 @@ func Advise(a Action) string {
 		if len(t) == 0 || !isTestRunner(t) {
 			continue
 		}
-		return "`" + shorten(t) + "` sí corrió (aviso, no bloqueo). Para la próxima, `bflow check --quick <paquete>` corre las pruebas rápidas de este repo con menos salida."
+		return loc.T("guard.advise_quick_test", shorten(t))
 	}
 	return ""
 }
