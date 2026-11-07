@@ -14,8 +14,6 @@ import (
 
 // Escrituras a pruebas congeladas desde Bash (GH-86).
 
-const frozenReason = "%s quedó congelada al aprobar el contrato. Si la prueba está mal, reporta NEEDS_DECISION con el cambio que necesitas; si una persona lo aprueba y corre `bflow freeze --allow %s`, podrás cambiarla una vez."
-
 func frozenBashReason(c Context, p string, read bool) string {
 	r := c.t("guard.frozen_bash_reason", p, p)
 	if read {
