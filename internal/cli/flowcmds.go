@@ -29,7 +29,7 @@ var looksLikeID = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9]*-\d+$`)
 // engineFor construye el engine del repo actual.
 func engineFor(c *Ctx) (*engine.Engine, error) {
 	if c.Build == nil {
-		return nil, errors.New("bflow se compiló sin adaptadores")
+		return nil, errors.New(envLoc(c.Env).T("cli.no_adapters"))
 	}
 	e, err := c.Build(c.Dir)
 	if err == nil && e != nil && e.Loc != nil && c.Env != nil {
@@ -104,12 +104,13 @@ func flowCommand(run func(ctx context.Context, e *engine.Engine, id string, c *C
 }
 
 // afterStart hace lo que sigue a un start correcto: recordar el repo y abrir el panel.
-func afterStart(e *engine.Engine, o *engine.Outcome) {
+func afterStart(c *Ctx, e *engine.Engine, o *engine.Outcome) {
 	_ = config.RememberRepo(e.Cfg.Root) // para la red de la página del panel
 	if e.Cfg.UI.Watch || e.Cfg.UI.Web {
 		// Sin escritorio (CI, SSH) no se abre y no se avisa: es lo esperado.
 		if _, werr := openWatch(e.Cfg.Root, e.Store.Dir(), e.Cfg.UI.Web); werr != nil && !errors.Is(werr, errNoDesktop) {
-			o.Warnings = append(o.Warnings, "no se pudo abrir el panel (bflow watch): "+werr.Error())
+			loc := envLoc(c.Env)
+			o.Warnings = append(o.Warnings, loc.T("cli.watch_open_warning", werr.Error()))
 		}
 	}
 }
@@ -135,7 +136,7 @@ func init() {
 			return flowCommand(func(ctx context.Context, e *engine.Engine, id string, c *Ctx, _ []string) (engine.Outcome, error) {
 				o, err := e.Start(ctx, id, flow.Lane(lane), str(c.Flags, "slug"), str(c.Flags, "fixes"))
 				if err == nil {
-					afterStart(e, &o)
+					afterStart(c, e, &o)
 				}
 				return o, err
 			})(c)
@@ -174,7 +175,7 @@ func init() {
 				}
 				return env
 			}
-			afterStart(e, &o)
+			afterStart(c, e, &o)
 			env := outcomeEnvelope(o, c.Env.Loc)
 			env.Data["title"] = task.Title
 			return env
@@ -216,12 +217,13 @@ func init() {
 		Run: flowCommand(func(ctx context.Context, e *engine.Engine, id string, c *Ctx, _ []string) (engine.Outcome, error) {
 			o := engine.ApproveOpts{Gate: str(c.Flags, "gate"), Note: str(c.Flags, "note"), Manual: str(c.Flags, "manual") == "true"}
 			fmt.Sscan(str(c.Flags, "choice"), &o.Choice)
+			loc := envLoc(c.Env)
 			if str(c.Flags, "stdin") == "true" {
 				if str(c.Flags, "file") != "" {
-					return engine.Outcome{}, &flow.Rejection{Code: "usage", Reason: "usa --stdin o --file, no los dos"}
+					return engine.Outcome{}, &flow.Rejection{Code: "usage", Reason: loc.T("cli.approve_stdin_or_file")}
 				}
 				if g := o.Gate; g != "" && g != "discovery" {
-					return engine.Outcome{}, &flow.Rejection{Code: "bad_attachment", Reason: "--stdin solo aplica al gate discovery"}
+					return engine.Outcome{}, &flow.Rejection{Code: "bad_attachment", Reason: loc.T("cli.approve_stdin_discovery_only")}
 				}
 				const limit = 64 << 10
 				b, err := io.ReadAll(io.LimitReader(c.Stdin, limit+1))
@@ -229,7 +231,7 @@ func init() {
 					return engine.Outcome{}, err
 				}
 				if len(b) > limit {
-					return engine.Outcome{}, &flow.Rejection{Code: "discovery_too_long", Reason: "el discovery pasa de 64 KiB; recórtalo y ciérralo otra vez"}
+					return engine.Outcome{}, &flow.Rejection{Code: "discovery_too_long", Reason: loc.T("cli.discovery_too_long")}
 				}
 				o.Attachment = string(b)
 			} else if f := str(c.Flags, "file"); f != "" {
@@ -279,7 +281,7 @@ func init() {
 					return engine.Outcome{}, err
 				}
 				if len(b) > limit {
-					return engine.Outcome{}, &flow.Rejection{Code: "scout_too_long", Reason: "el reporte pasa de 64 KiB; recórtalo (40 líneas como máximo) y reporta otra vez"}
+					return engine.Outcome{}, &flow.Rejection{Code: "scout_too_long", Reason: envLoc(c.Env).T("cli.scout_too_long")}
 				}
 				s := string(b)
 				content = &s
@@ -340,12 +342,13 @@ func init() {
 			if err != nil {
 				return fail(err)
 			}
+			loc := envLoc(c.Env)
 			if f := str(c.Flags, "allow"); f != "" {
 				if err := e.AllowFrozen(id, f); err != nil {
 					return fail(err)
 				}
 				env := output.OK("freeze_allowed", map[string]any{"id": id, "file": f}, nil)
-				env.Text = fmt.Sprintf("%s: %s se puede cambiar una vez; se vuelve a congelar cuando el implementer reporte DONE", id, f)
+				env.Text = loc.T("cli.freeze_allowed", id, f)
 				return env
 			}
 			n, err := e.Refreeze(id)
@@ -353,7 +356,7 @@ func init() {
 				return fail(err)
 			}
 			env := output.OK("refrozen", map[string]any{"id": id, "files": n}, nil)
-			env.Text = fmt.Sprintf("%s: %d prueba(s) congelada(s) de nuevo con su contenido actual", id, n)
+			env.Text = loc.T("cli.refrozen", id, n)
 			return env
 		}})
 
@@ -384,7 +387,7 @@ func init() {
 			env := output.OK("shown", map[string]any{"id": id, "what": rest[0], "content": text}, nil)
 			env.Text = strings.TrimRight(text, "\n")
 			if strings.TrimSpace(text) == "" {
-				env.Text = fmt.Sprintf("(%s de %s está vacío todavía)", rest[0], id)
+				env.Text = envLoc(c.Env).T("cli.show_empty", rest[0], id)
 			}
 			return env
 		}})
@@ -450,7 +453,7 @@ func init() {
 				}
 			}
 			env := output.OK("synced", map[string]any{"applied": applied, "remaining": remaining}, nil)
-			env.Text = fmt.Sprintf("sincronizados: %v · pendientes: %d", applied, remaining)
+			env.Text = envLoc(c.Env).T("cli.sync_summary", applied, remaining)
 			if remaining > 0 {
 				env = env.WithExit(output.ExitError)
 				env.OK = false
@@ -581,18 +584,19 @@ func init() {
 				code = "import_plan"
 			}
 			env := output.OK(code, map[string]any{"tasks": plan.Tasks, "skipped": plan.Skipped}, nil)
+			loc := envLoc(c.Env)
 			var b strings.Builder
-			fmt.Fprintf(&b, "%d tarea(s)", len(plan.Tasks))
+			b.WriteString(loc.T("cli.import_tasks_count", len(plan.Tasks)))
 			if c.DryRun {
-				b.WriteString(" se importarían")
+				b.WriteString(loc.T("cli.import_would_import"))
 			} else {
-				b.WriteString(" importadas")
+				b.WriteString(loc.T("cli.import_imported"))
 			}
 			for _, t := range plan.Tasks {
 				fmt.Fprintf(&b, "\n  %s → %s · %s · %s", t.From, t.ID, t.Phase, t.Title)
 			}
 			if len(plan.Skipped) > 0 {
-				fmt.Fprintf(&b, "\n%d saltadas (cerradas o sin estado)", len(plan.Skipped))
+				b.WriteString("\n" + loc.T("cli.import_skipped", len(plan.Skipped)))
 			}
 			env.Text = b.String()
 			return env
@@ -620,27 +624,31 @@ func init() {
 			}
 			env := output.OK("panel", map[string]any{"items": rep.Items, "more": rep.More, "closed": rep.Closed,
 				"closed_outside": rep.ClosedOutside, "reminded": rep.Reminded, "warnings": rep.Warnings}, nil)
-			env.Text = renderPanel(rep)
+			env.Text = renderPanel(rep, envLoc(c.Env))
 			return env
 		}})
 }
 
-func renderPanel(rep engine.PanelReport) string {
+func renderPanel(rep engine.PanelReport, locs ...*i18n.Localizer) string {
+	loc := i18n.DefaultLocalizer()
+	if len(locs) > 0 && locs[0] != nil {
+		loc = locs[0]
+	}
 	var b strings.Builder
 	for _, id := range rep.Closed {
-		fmt.Fprintf(&b, "✅ %s cerrada: PR mergeado\n", id)
+		b.WriteString(loc.T("cli.panel_closed_pr", id) + "\n")
 	}
 	for _, c := range rep.ClosedOutside {
-		why := "(tracker)"
+		why := loc.T("cli.panel_closed_outside_tracker")
 		if c.Reason == "pr" {
-			why = fmt.Sprintf("(PR #%d mergeado)", c.PR)
+			why = loc.T("cli.panel_closed_outside_pr", c.PR)
 		}
-		fmt.Fprintf(&b, "%s cerrada: terminada fuera de esta copia %s\n", c.ID, why)
+		b.WriteString(loc.T("cli.panel_closed_outside", c.ID, why) + "\n")
 	}
 	if len(rep.Items) == 0 {
-		b.WriteString("📋 sin compromisos pendientes\n")
+		b.WriteString(loc.T("cli.panel_no_commitments") + "\n")
 	} else {
-		fmt.Fprintf(&b, "📋 compromisos (%d)\n", len(rep.Items)+rep.More)
+		b.WriteString(loc.T("cli.panel_commitments", len(rep.Items)+rep.More) + "\n")
 	}
 	for _, it := range rep.Items {
 		mark := "🟡"
@@ -653,23 +661,23 @@ func renderPanel(rep engine.PanelReport) string {
 		}
 		l := fmt.Sprintf("%s %s %s · %s", mark, it.ID, title, it.Phase)
 		if it.Gate != "" {
-			l += fmt.Sprintf(" · espera %s %dh", it.Gate, it.Hours)
+			l += loc.T("cli.panel_waiting_gate", it.Gate, it.Hours)
 		}
 		if it.Overdue {
-			l += " · VENCIDA " + it.Due
+			l += loc.T("cli.panel_overdue", it.Due)
 		} else if it.Due != "" {
-			l += " · due " + it.Due
+			l += loc.T("cli.panel_due", it.Due)
 		}
 		b.WriteString(l + "\n")
 	}
 	if rep.More > 0 {
-		fmt.Fprintf(&b, "… y %d más\n", rep.More)
+		b.WriteString(loc.T("cli.panel_more", rep.More) + "\n")
 	}
 	for _, r := range rep.Reminded {
-		b.WriteString("  ↳ comentado: " + r + "\n")
+		b.WriteString(loc.T("cli.panel_reminded", r) + "\n")
 	}
 	for _, w := range rep.Warnings {
-		b.WriteString("  ⚠ " + w + "\n")
+		b.WriteString(loc.T("cli.panel_warning", w) + "\n")
 	}
 	return strings.TrimRight(b.String(), "\n")
 }
