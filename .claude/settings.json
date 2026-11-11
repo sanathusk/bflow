@@ -3,43 +3,59 @@
     "commit": "",
     "pr": ""
   },
-  "permissions": {
-    "allow": [
-      "Bash(bflow *)"
-    ]
-  },
   "hooks": {
-    "SessionStart": [
+    "PostToolUse": [
       {
-        "matcher": "startup|resume|clear|compact",
         "hooks": [
           {
-            "type": "command",
-            "command": "bflow hook session-start",
-            "timeout": 30
+            "command": "bflow guard --post",
+            "timeout": 10,
+            "type": "command"
           }
-        ]
+        ],
+        "matcher": "Bash"
       }
     ],
     "PreToolUse": [
       {
-        "matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit|Read|Task|Agent",
         "hooks": [
           {
-            "type": "command",
             "command": "bflow guard --reads",
-            "timeout": 10
+            "timeout": 10,
+            "type": "command"
           }
-        ]
+        ],
+        "matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit|Read|Task|Agent"
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "command": "bflow hook session-start",
+            "timeout": 30,
+            "type": "command"
+          }
+        ],
+        "matcher": "startup|resume|clear|compact"
+      },
+      {
+        "hooks": [
+          {
+            "command": "bd prime --hook-json",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
       }
     ],
     "Stop": [
       {
         "hooks": [
           {
-            "type": "command",
             "command": "bflow hook tokens",
-            "timeout": 20
+            "timeout": 20,
+            "type": "command"
           }
         ]
       }
@@ -48,38 +64,31 @@
       {
         "hooks": [
           {
-            "type": "command",
             "command": "bflow hook tokens",
-            "timeout": 20
+            "timeout": 20,
+            "type": "command"
           }
         ]
       },
       {
-        "matcher": "bflow-.*",
         "hooks": [
           {
-            "type": "command",
             "command": "bflow hook subagent-stop",
-            "timeout": 20
+            "timeout": 20,
+            "type": "command"
           }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bflow guard --post",
-            "timeout": 10
-          }
-        ]
+        ],
+        "matcher": "bflow-.*"
       }
     ]
   },
+  "permissions": {
+    "allow": [
+      "Bash(bflow *)"
+    ]
+  },
   "statusLine": {
-    "type": "command",
-    "command": "bflow statusline"
+    "command": "bflow statusline",
+    "type": "command"
   }
 }
