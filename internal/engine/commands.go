@@ -28,7 +28,7 @@ func (e *Engine) Start(ctx context.Context, id string, lane flow.Lane, slug, fix
 	out, err := e.apply(ctx, id, flow.Event{Kind: flow.EvStart, Lane: lane, Fixes: fixes}, slug)
 	if err == nil && fixes != "" {
 		if _, lerr := e.Store.Load(fixes); lerr != nil {
-			out.Warnings = append(out.Warnings, fixes+" no tiene historial en bflow: el hotfix no sumará a sus métricas")
+			out.Warnings = append(out.Warnings, e.loc().T("engine.commands.fixes_no_history", fixes))
 		}
 	}
 	return out, err
@@ -45,7 +45,7 @@ func (e *Engine) New(ctx context.Context, lane flow.Lane, title, desc string, sl
 		}
 		sort.Strings(names)
 		return tracker.Task{}, Outcome{}, &flow.Rejection{Code: "unknown_lane",
-			Reason: fmt.Sprintf("carril desconocido %q (disponibles: %s)", lane, strings.Join(names, ", "))}
+			Reason: e.loc().T("engine.commands.unknown_lane", lane, strings.Join(names, ", "))}
 	}
 	task, err := e.CreateTask(ctx, title, desc)
 	if err != nil {
@@ -53,7 +53,7 @@ func (e *Engine) New(ctx context.Context, lane flow.Lane, title, desc string, sl
 	}
 	out, err := e.Start(ctx, task.ID, lane, strings.Join(slug, ""), "")
 	if err != nil {
-		return task, Outcome{ID: task.ID}, fmt.Errorf("%s creada, pero no arrancó: %w. Reintenta con bflow start %s --lane %s", task.ID, err, task.ID, lane)
+		return task, Outcome{ID: task.ID}, fmt.Errorf("%s: %w. %s", e.loc().T("engine.commands.created_not_started", task.ID), err, e.loc().T("engine.commands.retry_start", task.ID, lane))
 	}
 	return task, out, nil
 }
@@ -99,33 +99,33 @@ func (e *Engine) Approve(ctx context.Context, id string, o ApproveOpts) (Outcome
 			err = e.fillSection(rec, "discovery", o.Attachment)
 		}
 		if err != nil {
-			out.Warnings = append(out.Warnings, "no se pudo escribir el discovery en la spec: "+err.Error())
+			out.Warnings = append(out.Warnings, e.loc().T("engine.commands.discovery_write_failed", err.Error()))
 		}
 	}
 	if pending != nil && pending.Name == flow.GateContract && out.To == flow.Implementing {
 		if n, err := e.freezeTests(ctx, id); err != nil {
-			out.Warnings = append(out.Warnings, "no se pudieron congelar las pruebas: "+err.Error())
+			out.Warnings = append(out.Warnings, e.loc().T("engine.commands.freeze_failed", err.Error()))
 		} else if n > 0 {
-			out.Warnings = append(out.Warnings, fmt.Sprintf("%d prueba(s) congelada(s): no se editan hasta el PR", n))
+			out.Warnings = append(out.Warnings, e.loc().T("engine.commands.tests_frozen", n))
 		}
 	}
 	if pending != nil && pending.Name == flow.GateRepro {
 		line := fmt.Sprintf("- %s · gate repro: hotfix sin prueba de reproducción: %s (%s)\n", e.now().Format("2006-01-02"), oneLine(pending.Note), e.User)
 		if err := e.appendFile(id, "decisions.md", "# Decisiones en vuelo\n\n", line); err != nil {
-			out.Warnings = append(out.Warnings, "no se pudo guardar decisions.md: "+err.Error())
+			out.Warnings = append(out.Warnings, e.loc().T("engine.commands.decisions_write_failed", err.Error()))
 		}
 	}
 	if pending != nil && pending.Name == flow.GateDecision && out.Record != nil {
 		line := fmt.Sprintf("- %s · %s: %s → **%s** (%s)\n", e.now().Format("2006-01-02"), pending.Agent,
 			oneLine(pending.Note), out.Record.Flow.Decision, e.User)
 		if err := e.appendFile(id, "decisions.md", "# Decisiones en vuelo\n\n", line); err != nil {
-			out.Warnings = append(out.Warnings, "no se pudo guardar decisions.md: "+err.Error())
+			out.Warnings = append(out.Warnings, e.loc().T("engine.commands.decisions_write_failed", err.Error()))
 		}
 	}
 	if pending != nil && pending.Name != flow.GateDecision && pending.Name != flow.GateQuestions && strings.TrimSpace(o.Note) != "" {
 		line := fmt.Sprintf("- %s · gate %s: %s (%s)\n", e.now().Format("2006-01-02"), pending.Name, oneLine(o.Note), e.User)
 		if err := e.appendFile(id, "decisions.md", "# Decisiones en vuelo\n\n", line); err != nil {
-			out.Warnings = append(out.Warnings, "no se pudo guardar decisions.md: "+err.Error())
+			out.Warnings = append(out.Warnings, e.loc().T("engine.commands.decisions_write_failed", err.Error()))
 		}
 	}
 	out.Next.Clear = flow.SuggestClear(out.To, out.Next)
@@ -169,12 +169,12 @@ func (e *Engine) Report(ctx context.Context, id string, o ReportOpts) (Outcome, 
 	var after func() error
 	if o.NoRepro != nil {
 		if strings.TrimSpace(*o.NoRepro) == "" {
-			return Outcome{ID: id}, &flow.Rejection{Code: "no_repro_invalid", Reason: "--no-repro necesita el motivo de cerrar sin prueba de reproducción"}
+			return Outcome{ID: id}, &flow.Rejection{Code: "no_repro_invalid", Reason: e.loc().T("engine.commands.no_repro_invalid")}
 		}
 		ev.NoRepro = strings.TrimSpace(*o.NoRepro)
 	}
 	if o.Content != nil && o.Agent != flow.ScoutAgent {
-		return Outcome{ID: id}, &flow.Rejection{Code: "stdin_scout_only", Reason: "--stdin solo lo usa el scout; los demás reportan con --file o --note"}
+		return Outcome{ID: id}, &flow.Rejection{Code: "stdin_scout_only", Reason: e.loc().T("engine.commands.stdin_scout_only")}
 	}
 	if o.Agent == flow.ScoutAgent {
 		c := ""
@@ -182,10 +182,10 @@ func (e *Engine) Report(ctx context.Context, id string, o ReportOpts) (Outcome, 
 			c = *o.Content
 		}
 		if strings.TrimSpace(c) == "" {
-			return Outcome{ID: id}, &flow.Rejection{Code: "scout_empty", Reason: "el reporte del scout llega por stdin y no puede ir vacío"}
+			return Outcome{ID: id}, &flow.Rejection{Code: "scout_empty", Reason: e.loc().T("engine.commands.scout_empty")}
 		}
 		if n := strings.Count(strings.TrimRight(c, "\n"), "\n") + 1; n > ScoutMaxLines {
-			return Outcome{ID: id}, &flow.Rejection{Code: "scout_too_long", Reason: fmt.Sprintf("el reporte trae %d líneas y el máximo es %d; recórtalo y reporta otra vez", n, ScoutMaxLines)}
+			return Outcome{ID: id}, &flow.Rejection{Code: "scout_too_long", Reason: e.loc().T("engine.commands.scout_too_long", n, ScoutMaxLines)}
 		}
 		after = func() error { return e.Store.WriteFile(id, "reports/scout.md", []byte(c)) }
 	}
@@ -206,7 +206,7 @@ func (e *Engine) Block(ctx context.Context, id, reason string) (Outcome, error) 
 // Con noChangelog, además, exime a documenting del changelog (exige nota).
 func (e *Engine) Unblock(ctx context.Context, id, note string, noChangelog bool) (Outcome, error) {
 	if noChangelog && strings.TrimSpace(note) == "" {
-		return Outcome{}, &flow.Rejection{Code: "note_required", Reason: "--no-changelog necesita --note con el motivo"}
+		return Outcome{}, &flow.Rejection{Code: "note_required", Reason: e.loc().T("engine.commands.no_changelog_note_required")}
 	}
 	return e.apply(ctx, id, flow.Event{Kind: flow.EvUnblock, Note: note, NoChangelog: noChangelog}, "")
 }
@@ -219,10 +219,10 @@ func (e *Engine) Drop(ctx context.Context, id, note string) (Outcome, error) {
 		return out, err
 	}
 	if b := out.Record.Branch; b != "" {
-		out.Warnings = append(out.Warnings, "la rama "+b+" sigue existiendo; bórrala a mano si ya no sirve")
+		out.Warnings = append(out.Warnings, e.loc().T("engine.commands.branch_still_exists", b))
 	}
 	if pr := out.Record.PR; pr != nil && !pr.Merged {
-		out.Warnings = append(out.Warnings, "el PR "+pr.URL+" sigue abierto; ciérralo a mano si ya no sirve")
+		out.Warnings = append(out.Warnings, e.loc().T("engine.commands.pr_still_open", pr.URL))
 	}
 	return out, nil
 }
@@ -277,7 +277,7 @@ func (e *Engine) Status(ctx context.Context, id string) (View, error) {
 	if errors.Is(err, store.ErrNotFound) {
 		task, terr := e.Tracker.Get(ctx, id)
 		if terr != nil {
-			return View{}, trackerErr(id, terr)
+			return View{}, e.trackerErr(id, terr)
 		}
 		s := flow.New(id, Slug(task.Title))
 		return View{ID: id, Title: task.Title, URL: task.URL, Phase: flow.Backlog, TrackerState: task.State, TrackerPhase: task.Phase,
@@ -342,7 +342,7 @@ func (e *Engine) Active(ctx context.Context) (string, error) {
 	}
 	switch len(views) {
 	case 0:
-		return "", &flow.Rejection{Code: "no_active_task", Reason: "no hay tareas en curso; indica el ID (bflow status <ID>) o empieza una con bflow start <ID> --lane <carril>"}
+		return "", &flow.Rejection{Code: "no_active_task", Reason: e.loc().T("engine.commands.no_active_task")}
 	case 1:
 		return views[0].ID, nil
 	}
@@ -350,14 +350,14 @@ func (e *Engine) Active(ctx context.Context) (string, error) {
 	for _, v := range views {
 		ids = append(ids, fmt.Sprintf("%s (%s)", v.ID, v.Phase))
 	}
-	return "", &flow.Rejection{Code: "ambiguous_task", Reason: "hay varias tareas en curso; indica cuál: " + strings.Join(ids, ", ")}
+	return "", &flow.Rejection{Code: "ambiguous_task", Reason: e.loc().T("engine.commands.ambiguous_task", strings.Join(ids, ", "))}
 }
 
 // CreateTask crea una tarea si el tracker lo permite.
 func (e *Engine) CreateTask(ctx context.Context, title, desc string) (tracker.Task, error) {
 	c, ok := e.Tracker.(tracker.Creator)
 	if !ok {
-		return tracker.Task{}, fmt.Errorf("el tracker %s no permite crear tareas desde bflow; créala en el tracker y usa su ID", e.Tracker.Name())
+		return tracker.Task{}, fmt.Errorf("%s", e.loc().T("engine.commands.tracker_no_create", e.Tracker.Name()))
 	}
 	return c.Create(ctx, title, desc)
 }
@@ -366,7 +366,7 @@ func (e *Engine) CreateTask(ctx context.Context, title, desc string) (tracker.Ta
 func (e *Engine) afterTransition(rec store.Record) []string {
 	if rec.Flow.Phase == flow.Spec {
 		if err := e.ensureSpec(rec); err != nil {
-			return []string{"no se pudo crear el spec: " + err.Error()}
+			return []string{e.loc().T("engine.commands.spec_create_failed", err.Error())}
 		}
 	}
 	return nil

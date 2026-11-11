@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"innobytes.tech/bflow/internal/flow"
+	"innobytes.tech/bflow/internal/i18n"
 	"innobytes.tech/bflow/internal/store"
 	"innobytes.tech/bflow/internal/tracker"
 	"innobytes.tech/bflow/internal/vcs"
@@ -17,10 +18,10 @@ import (
 
 // prSections son los artefactos de .bflow/tasks/<ID>/ que van a la
 // descripción del PR, en orden. Así salen del repo y quedan donde se revisan.
-var prSections = []struct{ title, file string }{
-	{"Review-map", "reports/review-map.md"},
-	{"Walkthrough", "walkthrough.md"},
-	{"Decisiones en vuelo", "decisions.md"},
+var prSections = []struct{ key, title, file string }{
+	{"review_map", "Review-map", "reports/review-map.md"},
+	{"walkthrough", "Walkthrough", "walkthrough.md"},
+	{"decisions", "Decisiones en vuelo", "decisions.md"},
 }
 
 // PRBody arma la descripción del PR.
@@ -28,7 +29,7 @@ func (e *Engine) PRBody(rec store.Record) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "**%s** · %s\n", rec.Flow.ID, rec.Title)
 	if rec.URL != "" {
-		fmt.Fprintf(&b, "\nTarea: %s\n", rec.URL)
+		fmt.Fprintf(&b, "\n%s %s\n", e.loc().T("engine.pr.task_prefix"), rec.URL)
 	}
 	if brief, err := e.specSection(rec, "brief"); err == nil && brief != "" {
 		fmt.Fprintf(&b, "\n## Brief\n\n%s\n", brief)
@@ -38,10 +39,11 @@ func (e *Engine) PRBody(rec store.Record) string {
 		if err != nil || strings.TrimSpace(string(body)) == "" {
 			continue
 		}
-		fmt.Fprintf(&b, "\n## %s\n\n%s\n", s.title, strings.TrimSpace(demoteHeadings(string(body))))
+		title := e.loc().T("engine.pr.section_" + s.key)
+		fmt.Fprintf(&b, "\n## %s\n\n%s\n", title, strings.TrimSpace(demoteHeadings(string(body))))
 	}
 	if body := e.changelog(rec.Flow); body != "" {
-		fmt.Fprintf(&b, "\n## Contrato para consumidores\n\n%s\n", demoteHeadings(body))
+		fmt.Fprintf(&b, "\n## %s\n\n%s\n", e.loc().T("engine.pr.consumer_contract_title"), demoteHeadings(body))
 	}
 	if l, ok := e.Tracker.(tracker.PRLinker); ok {
 		if ref := l.CloseRef(rec.Flow.ID); ref != "" {
@@ -52,7 +54,7 @@ func (e *Engine) PRBody(rec store.Record) string {
 	if slices.Contains(e.flowCfg().Lanes[rec.Flow.Lane], flow.Spec) {
 		fmt.Fprintf(&b, "Spec: `%s` · ", flow.SpecPath(rec.Flow.ID, rec.Flow.Slug))
 	}
-	b.WriteString("generado por bflow\n")
+	b.WriteString(e.loc().T("engine.pr.footer_generated") + "\n")
 	return b.String()
 }
 
@@ -85,20 +87,20 @@ func (e *Engine) openPR(ctx context.Context, rec *store.Record) ([]string, error
 		rec.Branch = e.BranchName(rec.Flow)
 	}
 	if e.Git == nil {
-		return []string{"sin git: no se hizo push ni se abrió el PR"}, nil
+		return []string{e.loc().T("engine.pr.no_git_warn")}, nil
 	}
-	warns := e.commitSpec(ctx, rec.Flow, "actualiza la spec") // tareas marcadas, decisiones en vuelo
+	warns := e.commitSpec(ctx, rec.Flow, e.loc().T("engine.pr.commit_update_spec")) // tareas marcadas, decisiones en vuelo
 	if files := e.uncommitted(ctx, rec.Flow); len(files) > 0 {
-		return nil, uncommittedRejection(files, "aprueba otra vez para abrir el PR")
+		return nil, uncommittedRejection(files, e.loc().T("engine.pr.when_approve_pr"), e.loc())
 	}
 	if files := e.bflowInDiff(ctx); len(files) > 0 {
-		return nil, bflowInDiffRejection(files, "aprueba otra vez para abrir el PR")
+		return nil, bflowInDiffRejection(files, e.loc().T("engine.pr.when_approve_pr"), e.loc())
 	}
 	if err := e.Git.Push(ctx, rec.Branch); err != nil {
 		return nil, fmt.Errorf("push de %s: %w", rec.Branch, err)
 	}
 	if e.Host == nil {
-		return append(warns, "push hecho; sin host remoto configurado: abre el PR a mano (vcs.host)"), nil
+		return append(warns, e.loc().T("engine.pr.push_no_host_warn")), nil
 	}
 	base := e.Cfg.VCS.BaseBranch
 	body := e.PRBody(*rec)
@@ -107,7 +109,7 @@ func (e *Engine) openPR(ctx context.Context, rec *store.Record) ([]string, error
 			return nil, fmt.Errorf("actualizar PR #%d: %w", pr.Number, err)
 		}
 		rec.PR = &store.PR{Number: pr.Number, URL: pr.URL}
-		return append(warns, fmt.Sprintf("PR #%d ya existía; descripción actualizada: %s", pr.Number, pr.URL)), nil
+		return append(warns, e.loc().T("engine.pr.pr_updated", pr.Number, pr.URL)), nil
 	} else if !errors.Is(err, vcs.ErrNoPR) {
 		if degradable(err) {
 			return append(warns, e.degradePR(rec, base, err)...), nil
@@ -122,7 +124,7 @@ func (e *Engine) openPR(ctx context.Context, rec *store.Record) ([]string, error
 		return nil, fmt.Errorf("abrir PR: %w", err)
 	}
 	rec.PR = &store.PR{Number: pr.Number, URL: pr.URL}
-	return append(warns, fmt.Sprintf("PR #%d abierto: %s", pr.Number, pr.URL)), nil
+	return append(warns, e.loc().T("engine.pr.pr_opened", pr.Number, pr.URL)), nil
 }
 
 // degradable: sin token o con un token que no ve el repo, el PR se deja listo
@@ -135,9 +137,9 @@ func (e *Engine) degradePR(rec *store.Record, base string, cause error) []string
 	url := e.Host.CompareURL(base, rec.Branch)
 	rec.PR = &store.PR{URL: url}
 	if err := e.Store.WriteFile(rec.Flow.ID, "pr-body.md", []byte(e.PRBody(*rec))); err != nil {
-		return []string{"no se pudo guardar pr-body.md: " + err.Error()}
+		return []string{e.loc().T("engine.pr.pr_body_save_failed", err.Error())}
 	}
-	return []string{fmt.Sprintf("%v: crea el PR aquí: %s (descripción lista en .bflow/tasks/%s/pr-body.md; bflow connect github para abrirlo solo)", cause, url, rec.Flow.ID)}
+	return []string{e.loc().T("engine.pr.degrade_instructions", cause, url, rec.Flow.ID)}
 }
 
 // uncommitted son los cambios sin commitear o sin rastrear en todo el árbol,
@@ -191,12 +193,12 @@ func (e *Engine) bflowInDiff(ctx context.Context) []string {
 	return out
 }
 
-func bflowInDiffRejection(files []string, when string) *flow.Rejection {
-	return &flow.Rejection{Code: "bflow_in_diff", Reason: ".bflow/ no va en el PR; el diff contra la base trae:\n" + strings.Join(files, "\n") +
-		"\nSácalos del índice con `git rm -r --cached <ruta>`, commitea y " + when + "."}
+func bflowInDiffRejection(files []string, when string, locs ...*i18n.Localizer) *flow.Rejection {
+	loc := locOf(locs...)
+	return &flow.Rejection{Code: "bflow_in_diff", Reason: loc.T("engine.pr.bflow_in_diff_rejection", strings.Join(files, "\n"), when)}
 }
 
-func uncommittedRejection(files []string, when string) *flow.Rejection {
-	return &flow.Rejection{Code: "uncommitted", Reason: "hay cambios sin commitear o sin rastrear que no entrarían al PR:\n" + strings.Join(files, "\n") +
-		"\nCommitéalos (o descarta los que no van) y " + when + "."}
+func uncommittedRejection(files []string, when string, locs ...*i18n.Localizer) *flow.Rejection {
+	loc := locOf(locs...)
+	return &flow.Rejection{Code: "uncommitted", Reason: loc.T("engine.pr.uncommitted_rejection", strings.Join(files, "\n"), when)}
 }

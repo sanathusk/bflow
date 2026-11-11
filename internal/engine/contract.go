@@ -2,7 +2,6 @@ package engine
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -23,8 +22,7 @@ var goTestFunc = regexp.MustCompile(`(?m)^func (Test\w+)\(`)
 func (e *Engine) contractCheck(ctx context.Context, id string) (verified bool, rej *flow.Rejection) {
 	files := e.taskTests(ctx)
 	if hollow := hollowTests(e.Cfg.Root, files); len(hollow) > 0 {
-		return false, &flow.Rejection{Code: "contract_hollow", Reason: "el contrato tiene pruebas que se saltan siempre o no tienen cuerpo; al aprobarlo se congelan y ya no se pueden completar:" + "\n" +
-			strings.Join(hollow, "\n") + "\n" + "Escribe su cuerpo real (preparar, actuar, verificar contra las firmas) para que fallen contra los stubs, y reporta otra vez."}
+		return false, &flow.Rejection{Code: "contract_hollow", Reason: e.loc().T("engine.contract.hollow", strings.Join(hollow, "\n"))}
 	}
 	testStep := e.Cfg.Check.TestStep
 	if testStep == "" {
@@ -39,16 +37,14 @@ func (e *Engine) contractCheck(ctx context.Context, id string) (verified bool, r
 		fresh = false
 	}
 	if !fresh {
-		return false, &flow.Rejection{Code: "contract_stale", Reason: "CONTRACT_READY exige el contrato commiteado y un check vigente sobre él: " + detail +
-			"\nHaz commit del contrato, corre `bflow check " + id + "` (las T1 deben fallar) y reporta otra vez."}
+		return false, &flow.Rejection{Code: "contract_stale", Reason: e.loc().T("engine.contract.stale", detail, id)}
 	}
 	for _, s := range res.Steps {
 		if s.Name == testStep {
 			break
 		}
 		if s.Status == "fail" {
-			return false, &flow.Rejection{Code: "contract_broken", Reason: fmt.Sprintf("el paso %q del check falló antes de las pruebas: el contrato debe compilar y pasar lo previo, y fallar solo en las T1.\n%s\nCorrígelo, haz commit, corre `bflow check %s` y reporta otra vez.",
-				s.Name, strings.Join(failLines(s.Fails, s.Tail, contractFailLines), "\n"), id)}
+			return false, &flow.Rejection{Code: "contract_broken", Reason: e.loc().T("engine.contract.broken", s.Name, strings.Join(failLines(s.Fails, s.Tail, contractFailLines), "\n"), id)}
 		}
 	}
 	t1 := contractTestNames(e.Cfg.Root, files)
@@ -65,8 +61,7 @@ func (e *Engine) contractCheck(ctx context.Context, id string) (verified bool, r
 			return true, nil
 		}
 	}
-	return false, &flow.Rejection{Code: "contract_green", Reason: fmt.Sprintf("el paso %q no falla por ninguna prueba T1 (%s): las T1 deben fallar contra los stubs; si pasan no verifican nada.\nAjusta las pruebas, haz commit, corre `bflow check %s` y reporta otra vez.",
-		testStep, strings.Join(firstN(names, 5), ", "), id)}
+	return false, &flow.Rejection{Code: "contract_green", Reason: e.loc().T("engine.contract.green", testStep, strings.Join(firstN(names, 5), ", "), id)}
 }
 
 // failLines son las líneas de fallo del paso: Fails, o las del Tail si no hay.

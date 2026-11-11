@@ -3,7 +3,6 @@ package engine
 import (
 	"context"
 	"errors"
-	"fmt"
 	"slices"
 	"strings"
 
@@ -67,7 +66,7 @@ func (e *Engine) Nudge(ctx context.Context, agent string) (string, error) {
 	}
 	_ = e.Store.Append(store.Entry{TS: e.now(), ID: id, Event: "nudge", Agent: agent, By: e.User, Data: map[string]any{"n": n}})
 	if block {
-		note := fmt.Sprintf("%s terminó %d veces sin reportar a bflow. Revisa su trabajo; para relanzarlo: bflow unblock %s", agent, n, id)
+		note := e.loc().T("engine.nudge.block_note", agent, n, id)
 		_, err := e.Block(ctx, id, note)
 		return "", err
 	}
@@ -77,8 +76,7 @@ func (e *Engine) Nudge(ctx context.Context, agent string) (string, error) {
 func (e *Engine) nudgeReason(rec store.Record, agent string, n int) string {
 	s := rec.Flow
 	if agent == flow.ScoutAgent {
-		return fmt.Sprintf("Terminaste sin reportar a bflow (aviso %d de %d). Si ya acabaste, reporta con `bflow report %s --agent scout --verdict DONE --stdin` (contenido por stdin, 40 líneas como máximo). Si no, sigue con tu parte.\nTu respuesta final es solo la salida de `bflow report`.",
-			n, MaxNudges, s.ID)
+		return e.loc().T("engine.nudge.scout_reason", n, MaxNudges, s.ID)
 	}
 	vs := flow.Verdicts(s.Phase)
 	names := make([]string, len(vs))
@@ -86,16 +84,15 @@ func (e *Engine) nudgeReason(rec store.Record, agent string, n int) string {
 		names[i] = string(v)
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "Terminaste sin reportar a bflow (aviso %d de %d). Si ya acabaste, corre `bflow report %s --agent %s --verdict %s`.",
-		n, MaxNudges, s.ID, agent, strings.Join(names, "|"))
+	b.WriteString(e.loc().T("engine.nudge.generic_lead", n, MaxNudges, s.ID, agent, strings.Join(names, "|")))
 	if s.Phase == flow.Implementing {
 		if open := openTasks(e, rec); len(open) > 0 {
-			b.WriteString(" Si no, sigue con lo pendiente en tasks:\n" + strings.Join(open, "\n"))
+			b.WriteString(e.loc().T("engine.nudge.continue_tasks", strings.Join(open, "\n")))
 		}
 	} else {
-		b.WriteString(" Si no, sigue con tu parte.")
+		b.WriteString(e.loc().T("engine.nudge.continue_generic"))
 	}
-	b.WriteString("\nTu respuesta final es solo la salida de `bflow report`.")
+	b.WriteString(e.loc().T("engine.nudge.final_response_hint"))
 	return b.String()
 }
 

@@ -33,16 +33,16 @@ func (e *Engine) phaseUsage(id string, p flow.Phase) (int64, error) {
 }
 
 // budgetNext arma el next de la pregunta de presupuesto (R6).
-func budgetNext(id string, p flow.Phase, used, budget int64) output.Next {
+func (e *Engine) budgetNext(id string, p flow.Phase, used, budget int64) output.Next {
 	mult := float64(used) / float64(budget)
 	return output.Next{
 		Action:   output.ActionAsk,
 		Gate:     string(flow.GateBudget),
-		Display:  fmt.Sprintf("%s: %s / %s nuevos (%.1fx)", p, metrics.Human(used), metrics.Human(budget), mult),
-		Question: fmt.Sprintf("La fase %s pasó su presupuesto de tokens. ¿Sigue?", p),
+		Display:  fmt.Sprintf("%s: %s / %s %s (%.1fx)", p, metrics.Human(used), metrics.Human(budget), e.loc().T("engine.budget.new_tokens"), mult),
+		Question: e.loc().T("engine.budget.question", p),
 		Options: []output.Option{
-			{ID: "continue", Label: "Sigue", Command: fmt.Sprintf("bflow approve %s --gate budget", id)},
-			{ID: "block", Label: "Bloquear", NeedsNote: true, Command: fmt.Sprintf("bflow reject %s --gate budget --note \"<motivo>\"", id)},
+			{ID: "continue", Label: e.loc().T("engine.budget.option_continue"), Command: fmt.Sprintf("bflow approve %s --gate budget", id)},
+			{ID: "block", Label: e.loc().T("engine.budget.option_block"), NeedsNote: true, Command: fmt.Sprintf("bflow reject %s --gate budget --note \"<motivo>\"", id)},
 		},
 	}
 }
@@ -61,7 +61,7 @@ func (e *Engine) next(rec store.Record) output.Next {
 		return flow.NextFor(cfg, rec.Flow)
 	}
 	if _, ok := flow.BudgetDue(cfg, rec.Flow, used); ok {
-		return budgetNext(rec.Flow.ID, rec.Flow.Phase, used, budget)
+		return e.budgetNext(rec.Flow.ID, rec.Flow.Phase, used, budget)
 	}
 	return flow.NextFor(cfg, rec.Flow)
 }
@@ -74,8 +74,8 @@ func (e *Engine) Budgets() map[flow.Phase]int64 {
 // budgetDecisionLine escribe en decisions.md la respuesta a la pregunta de
 // presupuesto (R12).
 func (e *Engine) budgetDecisionLine(id string, phase flow.Phase, used, budget int64, outcome, note string) error {
-	line := fmt.Sprintf("- %s · presupuesto %s: %s / %s nuevos -> %s", e.now().Format("2006-01-02"),
-		phase, metrics.Human(used), metrics.Human(budget), outcome)
+	line := fmt.Sprintf("- %s · %s", e.now().Format("2006-01-02"),
+		e.loc().T("engine.budget.decision_line", phase, metrics.Human(used), metrics.Human(budget), outcome))
 	if note != "" {
 		line += ": " + note
 	}
@@ -93,7 +93,7 @@ func (e *Engine) approveBudget(id string) (Outcome, error) {
 	cfg := e.flowCfg()
 	budget, has := cfg.Budget[rec.Flow.Phase]
 	if !has {
-		return Outcome{ID: id}, &flow.Rejection{Code: "no_budget_gate", Reason: "no hay pregunta de presupuesto vigente"}
+		return Outcome{ID: id}, &flow.Rejection{Code: "no_budget_gate", Reason: e.loc().T("engine.budget.no_gate_active")}
 	}
 	used, err := e.phaseUsage(id, rec.Flow.Phase)
 	if err != nil {
@@ -101,14 +101,14 @@ func (e *Engine) approveBudget(id string) (Outcome, error) {
 	}
 	k, ok := flow.BudgetDue(cfg, rec.Flow, used)
 	if !ok {
-		return Outcome{ID: id}, &flow.Rejection{Code: "no_budget_gate", Reason: "no hay pregunta de presupuesto vigente"}
+		return Outcome{ID: id}, &flow.Rejection{Code: "no_budget_gate", Reason: e.loc().T("engine.budget.no_gate_active")}
 	}
 	out, err := e.apply(context.Background(), id, flow.Event{Kind: flow.EvApprove, Gate: flow.GateBudget, Choice: k}, "")
 	if err != nil {
 		return out, err
 	}
-	if derr := e.budgetDecisionLine(id, rec.Flow.Phase, used, budget, "sigue", ""); derr != nil {
-		out.Warnings = append(out.Warnings, "no se pudo guardar decisions.md: "+derr.Error())
+	if derr := e.budgetDecisionLine(id, rec.Flow.Phase, used, budget, e.loc().T("engine.budget.outcome_continue"), ""); derr != nil {
+		out.Warnings = append(out.Warnings, e.loc().T("engine.commands.decisions_write_failed", derr.Error()))
 	}
 	return out, nil
 }
@@ -122,7 +122,7 @@ func (e *Engine) rejectBudget(id, note string) (Outcome, error) {
 	cfg := e.flowCfg()
 	budget, has := cfg.Budget[rec.Flow.Phase]
 	if !has {
-		return Outcome{ID: id}, &flow.Rejection{Code: "no_budget_gate", Reason: "no hay pregunta de presupuesto vigente"}
+		return Outcome{ID: id}, &flow.Rejection{Code: "no_budget_gate", Reason: e.loc().T("engine.budget.no_gate_active")}
 	}
 	used, err := e.phaseUsage(id, rec.Flow.Phase)
 	if err != nil {
@@ -130,19 +130,19 @@ func (e *Engine) rejectBudget(id, note string) (Outcome, error) {
 	}
 	k, ok := flow.BudgetDue(cfg, rec.Flow, used)
 	if !ok {
-		return Outcome{ID: id}, &flow.Rejection{Code: "no_budget_gate", Reason: "no hay pregunta de presupuesto vigente"}
+		return Outcome{ID: id}, &flow.Rejection{Code: "no_budget_gate", Reason: e.loc().T("engine.budget.no_gate_active")}
 	}
 	motivo := strings.TrimSpace(note)
 	if motivo == "" {
-		return Outcome{ID: id}, &flow.Rejection{Code: "note_required", Reason: "un rechazo de presupuesto necesita --note con el motivo"}
+		return Outcome{ID: id}, &flow.Rejection{Code: "note_required", Reason: e.loc().T("engine.budget.note_required")}
 	}
-	nota := fmt.Sprintf("presupuesto de %s superado (%s / %s nuevos): %s", rec.Flow.Phase, metrics.Human(used), metrics.Human(budget), motivo)
+	nota := e.loc().T("engine.budget.reject_note", rec.Flow.Phase, metrics.Human(used), metrics.Human(budget), motivo)
 	out, err := e.apply(context.Background(), id, flow.Event{Kind: flow.EvReject, Gate: flow.GateBudget, Choice: k, Note: nota}, "")
 	if err != nil {
 		return out, err
 	}
-	if derr := e.budgetDecisionLine(id, rec.Flow.Phase, used, budget, "bloquea", motivo); derr != nil {
-		out.Warnings = append(out.Warnings, "no se pudo guardar decisions.md: "+derr.Error())
+	if derr := e.budgetDecisionLine(id, rec.Flow.Phase, used, budget, e.loc().T("engine.budget.outcome_block"), motivo); derr != nil {
+		out.Warnings = append(out.Warnings, e.loc().T("engine.commands.decisions_write_failed", derr.Error()))
 	}
 	return out, nil
 }

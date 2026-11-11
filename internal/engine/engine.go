@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -72,6 +71,13 @@ type Outcome struct {
 	Record   *store.Record `json:"-"`
 }
 
+func (e *Engine) loc() *i18n.Localizer {
+	if e != nil && e.Loc != nil {
+		return e.Loc
+	}
+	return i18n.DefaultLocalizer()
+}
+
 func (e *Engine) flowCfg() flow.Config {
 	fc := e.Cfg.Flow.Core()
 	fc.ContractGate = !e.contractValidable()
@@ -117,13 +123,13 @@ func (e *Engine) applyWith(ctx context.Context, id string, ev flow.Event, slug s
 		if !exists {
 			if ev.Kind != flow.EvStart {
 				if _, err := e.Tracker.Get(ctx, id); err != nil {
-					return trackerErr(id, err)
+					return e.trackerErr(id, err)
 				}
 				return &flow.Rejection{Code: "not_started", Reason: fmt.Sprintf("%s no ha empezado: bflow start %s --lane <full|light|hotfix>", id, id)}
 			}
 			task, err := e.Tracker.Get(ctx, id)
 			if err != nil {
-				return trackerErr(id, err)
+				return e.trackerErr(id, err)
 			}
 			if slug == "" {
 				slug = Slug(task.Title)
@@ -146,21 +152,21 @@ func (e *Engine) applyWith(ctx context.Context, id string, ev flow.Event, slug s
 		if ev.Kind == flow.EvReport && ev.Verdict == flow.Split && rec.Flow.Phase == flow.Spec {
 			brief, err := e.specSection(*rec, "brief")
 			if err != nil {
-				return splitInvalid("no se pudo leer el Brief (%v)", err)
+				return splitInvalid(e.loc(), "brief_read_failed", err)
 			}
-			if _, err := ParseSplit(brief); err != nil {
+			if _, err := ParseSplit(brief, e.loc()); err != nil {
 				return err
 			}
 		}
 		if ev.Kind == flow.EvReport && ev.Agent != flow.ScoutAgent && ev.Verdict == flow.DoneV && rec.Flow.Phase == flow.Documenting {
 			if files := e.uncommitted(ctx, rec.Flow); len(files) > 0 {
-				return uncommittedRejection(files, "reporta DONE otra vez")
+				return uncommittedRejection(files, e.loc().T("engine.pr.when_report_done"), e.loc())
 			}
 			if files := e.bflowInDiff(ctx); len(files) > 0 {
-				return bflowInDiffRejection(files, "reporta DONE otra vez")
+				return bflowInDiffRejection(files, e.loc().T("engine.pr.when_report_done"), e.loc())
 			}
 			if found := e.NarrativeComments(ctx, id); len(found) > 0 {
-				return narrativeRejection(found)
+				return narrativeRejection(found, e.Loc)
 			}
 			if rej := e.docsPending(ctx, id); rej != nil {
 				return rej
@@ -175,28 +181,27 @@ func (e *Engine) applyWith(ctx context.Context, id string, ev flow.Event, slug s
 				return err
 			}
 			if !ok {
-				return &flow.Rejection{Code: "check_required", Reason: "DONE requiere un check verde sobre el código actual: " + detail}
+				return &flow.Rejection{Code: "check_required", Reason: e.loc().T("engine.core.check_required", detail)}
 			}
 			if changed := e.FrozenChanged(id); len(changed) > 0 {
-				return frozenRejection(changed)
+				return frozenRejection(changed, e.loc())
 			}
 			if rec.Flow.RejectHead != "" && e.Git != nil {
 				if head, err := e.Git.HeadSHA(ctx); err == nil && head == rec.Flow.RejectHead {
-					return &flow.Rejection{Code: "no_new_commits", Reason: "la compuerta de calidad rechazó (ronda " + strconv.Itoa(rec.Flow.Round) + ") y HEAD no avanzó: no hay commit con la corrección. Aplica lo que pide la nota del rechazo, haz commit y reporta DONE otra vez."}
+					return &flow.Rejection{Code: "no_new_commits", Reason: e.loc().T("engine.core.no_new_commits", rec.Flow.Round)}
 				}
 			}
 			if open := openTasks(e, *rec); len(open) > 0 {
-				return &flow.Rejection{Code: "tasks_open", Reason: "DONE exige todas las tareas de la spec marcadas [x]; faltan:\n" + strings.Join(open, "\n") +
-					"\nMárcalas al terminarlas; si una ya no aplica, anótalo en Design y márcala con el motivo."}
+				return &flow.Rejection{Code: "tasks_open", Reason: e.loc().T("engine.core.tasks_open", strings.Join(open, "\n"))}
 			}
 			if files := e.uncommitted(ctx, rec.Flow); len(files) > 0 {
-				return uncommittedRejection(files, "reporta DONE otra vez")
+				return uncommittedRejection(files, e.loc().T("engine.pr.when_report_done"), e.loc())
 			}
 			if files := e.bflowInDiff(ctx); len(files) > 0 {
-				return bflowInDiffRejection(files, "reporta DONE otra vez")
+				return bflowInDiffRejection(files, e.loc().T("engine.pr.when_report_done"), e.loc())
 			}
 			if found := e.NarrativeComments(ctx, id); len(found) > 0 {
-				return narrativeRejection(found)
+				return narrativeRejection(found, e.Loc)
 			}
 			if rec.Flow.Lane == flow.Hotfix && e.Checks != nil && e.Git != nil && ev.NoRepro == "" && rec.Flow.NoRepro == "" {
 				if rej := e.reproMissing(ctx, *rec); rej != nil {
@@ -211,7 +216,7 @@ func (e *Engine) applyWith(ctx context.Context, id string, ev flow.Event, slug s
 		if ev.Kind == flow.EvReport && rec.Flow.Phase == flow.Quality && isReviewer(ev.Agent) {
 			cov, m, hasMap := e.reviewCoverage(ctx, id)
 			if ev.Verdict == flow.Approved {
-				if rej := reviewIncomplete(cov, m, hasMap, e.diffBase()); rej != nil {
+				if rej := reviewIncomplete(cov, m, hasMap, e.diffBase(), e.Loc); rej != nil {
 					return rej
 				}
 			}
@@ -234,14 +239,14 @@ func (e *Engine) applyWith(ctx context.Context, id string, ev flow.Event, slug s
 			prevFrozen = e.readFrozen(id)
 			if n, err := e.freezeTests(ctx, id); err != nil {
 				ev.ContractOK = false
-				out.Warnings = append(out.Warnings, "no se pudieron congelar las pruebas, el contrato queda en la gate contract: "+err.Error())
+				out.Warnings = append(out.Warnings, e.loc().T("engine.core.freeze_failed_gate_contract", err.Error()))
 				if res, err = flow.Apply(fc, before, ev); err != nil {
 					return err
 				}
 			} else {
 				froze = true
 				if n > 0 {
-					out.Warnings = append(out.Warnings, fmt.Sprintf("%d prueba(s) congelada(s): no se editan hasta el PR", n))
+					out.Warnings = append(out.Warnings, e.loc().T("engine.core.tests_frozen", n))
 				}
 			}
 		}
@@ -291,7 +296,7 @@ func (e *Engine) applyWith(ctx context.Context, id string, ev flow.Event, slug s
 		e.refreezeAllowed(id)
 	}
 	if err := e.Store.Append(entries...); err != nil {
-		out.Warnings = append(out.Warnings, "no se pudo escribir log.jsonl: "+err.Error())
+		out.Warnings = append(out.Warnings, e.loc().T("engine.core.log_append_failed", err.Error()))
 	}
 	out.Warnings = append(out.Warnings, e.afterTransition(rec)...)
 	e.updateStatusCache(rec)
@@ -359,9 +364,9 @@ func (e *Engine) verify(ctx context.Context, id string) (bool, string, error) {
 	return true, "", nil
 }
 
-func trackerErr(id string, err error) error {
+func (e *Engine) trackerErr(id string, err error) error {
 	if errors.Is(err, tracker.ErrNotFound) {
-		return fmt.Errorf("%s no existe en el tracker", id)
+		return fmt.Errorf("%s", e.loc().T("engine.core.tracker_not_found", id))
 	}
 	return fmt.Errorf("tracker: %w", err)
 }
@@ -396,7 +401,7 @@ func (e *Engine) runEffects(ctx context.Context, rec *store.Record, fxs []flow.E
 			}
 			if err := e.trackerEffect(ctx, rec.Flow.ID, tfx); err != nil {
 				rec.Pending = append(rec.Pending, tfx)
-				warns = append(warns, fmt.Sprintf("tracker: %s quedó pendiente (%v); se reintenta en el próximo comando o con bflow panel", tfx.Kind, err))
+				warns = append(warns, e.loc().T("engine.core.tracker_pending_warn", tfx.Kind, err))
 			}
 		}
 	}
@@ -412,7 +417,7 @@ func (e *Engine) trackerEffect(ctx context.Context, id string, fx flow.Effect) e
 	case flow.FxComment:
 		return e.Tracker.Comment(ctx, id, fx.Body)
 	}
-	return fmt.Errorf("efecto desconocido %q", fx.Kind)
+	return fmt.Errorf("%s", e.loc().T("engine.core.unknown_effect", fx.Kind))
 }
 
 // syncPending reintenta los efectos pendientes en orden y se detiene en el
@@ -420,7 +425,7 @@ func (e *Engine) trackerEffect(ctx context.Context, id string, fx flow.Effect) e
 func (e *Engine) syncPending(ctx context.Context, rec *store.Record) []string {
 	for len(rec.Pending) > 0 {
 		if err := e.trackerEffect(ctx, rec.Flow.ID, rec.Pending[0]); err != nil {
-			return []string{fmt.Sprintf("tracker: %d efecto(s) pendiente(s) siguen sin sincronizar (%v)", len(rec.Pending), err)}
+			return []string{e.loc().T("engine.core.pending_unsynced_warn", len(rec.Pending), err)}
 		}
 		rec.Pending = rec.Pending[1:]
 	}
@@ -458,12 +463,12 @@ func (e *Engine) createBranch(ctx context.Context, rec *store.Record, _ bool) ([
 	name := e.BranchName(rec.Flow)
 	rec.Branch = name
 	if e.Git == nil {
-		return []string{"sin git: la rama " + name + " se registró pero no se creó"}, nil
+		return []string{e.loc().T("engine.core.no_git_branch_warn", name)}, nil
 	}
 	if dirty, err := e.Git.Dirty(ctx, e.Cfg.Check.CodePaths); err != nil {
 		return nil, fmt.Errorf("git: %w", err)
 	} else if len(dirty) > 0 {
-		return nil, &flow.Rejection{Code: "dirty_worktree", Reason: "hay cambios sin commitear en el código; guárdalos antes de crear la rama: " + strings.Join(dirty, ", ")}
+		return nil, &flow.Rejection{Code: "dirty_worktree", Reason: e.loc().T("engine.core.dirty_worktree", strings.Join(dirty, ", "))}
 	}
 	base := e.Cfg.VCS.BaseBranch
 	how, err := e.Git.EnsureBranch(ctx, name, base)
@@ -495,9 +500,9 @@ func (e *Engine) commitSpec(ctx context.Context, s flow.State, summary string) [
 	done, err := e.Git.Commit(ctx, paths, e.commitMessage("docs", s.ID, summary))
 	switch {
 	case err != nil:
-		return []string{"no se pudo hacer commit de la spec (" + err.Error() + "); commitéala a mano: " + strings.Join(paths, " ")}
+		return []string{e.loc().T("engine.core.commit_spec_failed", err.Error(), strings.Join(paths, " "))}
 	case done:
-		return []string{"commit de la spec: " + strings.Join(paths, " ")}
+		return []string{e.loc().T("engine.core.commit_spec_done", strings.Join(paths, " "))}
 	}
 	return nil
 }

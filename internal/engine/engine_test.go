@@ -11,6 +11,7 @@ import (
 
 	"innobytes.tech/bflow/internal/config"
 	"innobytes.tech/bflow/internal/flow"
+	"innobytes.tech/bflow/internal/i18n"
 	"innobytes.tech/bflow/internal/store"
 	"innobytes.tech/bflow/internal/testutil"
 	"innobytes.tech/bflow/internal/tracker"
@@ -56,7 +57,8 @@ func newEnv(t *testing.T, yaml string) *env {
 	ev := &env{tr: trackertest.NewMemory(), ver: &fakeVerifier{ok: true}, now: time.Date(2026, 9, 25, 9, 0, 0, 0, time.UTC)}
 	st := store.Open(root)
 	st.Now = func() time.Time { return ev.now }
-	ev.e = &Engine{Cfg: cfg, Store: st, Tracker: ev.tr, Verifier: ev.ver, Now: func() time.Time { return ev.now }, User: "dev"}
+	ev.e = &Engine{Cfg: cfg, Store: st, Tracker: ev.tr, Verifier: ev.ver, Now: func() time.Time { return ev.now }, User: "dev",
+		Loc: i18n.DefaultBundle().New("es")}
 	return ev
 }
 

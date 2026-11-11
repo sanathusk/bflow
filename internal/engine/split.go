@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	"innobytes.tech/bflow/internal/flow"
+	"innobytes.tech/bflow/internal/i18n"
 	"innobytes.tech/bflow/internal/store"
 	"innobytes.tech/bflow/internal/tracker"
 )
@@ -22,9 +23,10 @@ const (
 
 var splitBullet = regexp.MustCompile(`^- \*\*(.*?)\*\*:(.*)$`)
 
-func splitInvalid(format string, a ...any) error {
-	return &flow.Rejection{Code: "split_invalid", Reason: "la división del Brief no es válida: " + fmt.Sprintf(format, a...) +
-		". Escribe en el Brief una `### División` con 2 a 6 viñetas `- **<título>**: <alcance>` (títulos distintos de 120 caracteres como máximo) y reporta otra vez."}
+func splitInvalid(loc *i18n.Localizer, key string, a ...any) error {
+	l := locOf(loc)
+	detail := l.T("engine.split."+key, a...)
+	return &flow.Rejection{Code: "split_invalid", Reason: l.T("engine.split.invalid_wrapper", detail)}
 }
 
 func isDivisionHeading(line string) bool {
@@ -39,7 +41,8 @@ func isDivisionHeading(line string) bool {
 // ParseSplit lee la `### División` del Brief. Cualquier violación de las
 // reglas (2 a 6 hijas, título y alcance no vacíos, título único y de hasta
 // 120 runas) devuelve *flow.Rejection con código split_invalid.
-func ParseSplit(brief string) ([]SplitPart, error) {
+func ParseSplit(brief string, locs ...*i18n.Localizer) ([]SplitPart, error) {
+	loc := locOf(locs...)
 	lines := strings.Split(strings.ReplaceAll(brief, "\r\n", "\n"), "\n")
 	start := -1
 	for i, l := range lines {
@@ -49,7 +52,7 @@ func ParseSplit(brief string) ([]SplitPart, error) {
 		}
 	}
 	if start < 0 {
-		return nil, splitInvalid("falta la sección `### División`")
+		return nil, splitInvalid(loc, "missing_section")
 	}
 	var parts []SplitPart
 	seen := map[string]bool{}
@@ -61,7 +64,7 @@ func ParseSplit(brief string) ([]SplitPart, error) {
 		p := &parts[len(parts)-1]
 		p.Scope = strings.Join(scope, "\n")
 		if strings.TrimSpace(p.Scope) == "" {
-			return splitInvalid("la hija %q no tiene alcance (línea %d)", p.Title, line)
+			return splitInvalid(loc, "child_no_scope", p.Title, line)
 		}
 		return nil
 	}
@@ -76,7 +79,7 @@ func ParseSplit(brief string) ([]SplitPart, error) {
 		}
 		if l[0] == ' ' || l[0] == '\t' {
 			if len(parts) == 0 {
-				return nil, splitInvalid("línea %d con sangría antes de la primera viñeta", n)
+				return nil, splitInvalid(loc, "indent_before_first_bullet", n)
 			}
 			scope = append(scope, strings.TrimSpace(l))
 			continue
@@ -86,7 +89,7 @@ func ParseSplit(brief string) ([]SplitPart, error) {
 		}
 		m := splitBullet.FindStringSubmatch(l)
 		if m == nil {
-			return nil, splitInvalid("la línea %d no tiene el formato `- **<título>**: <alcance>`", n)
+			return nil, splitInvalid(loc, "malformed_bullet", n)
 		}
 		if err := flush(n); err != nil {
 			return nil, err
@@ -94,11 +97,11 @@ func ParseSplit(brief string) ([]SplitPart, error) {
 		title := strings.TrimSpace(m[1])
 		switch {
 		case title == "":
-			return nil, splitInvalid("la viñeta de la línea %d no tiene título", n)
+			return nil, splitInvalid(loc, "bullet_no_title", n)
 		case utf8.RuneCountInString(title) > maxSplitTitle:
-			return nil, splitInvalid("el título %q (línea %d) pasa de %d caracteres", title, n, maxSplitTitle)
+			return nil, splitInvalid(loc, "title_too_long", title, n, maxSplitTitle)
 		case seen[title]:
-			return nil, splitInvalid("el título %q (línea %d) está repetido", title, n)
+			return nil, splitInvalid(loc, "title_duplicate", title, n)
 		}
 		seen[title] = true
 		parts = append(parts, SplitPart{Title: title})
@@ -111,7 +114,7 @@ func ParseSplit(brief string) ([]SplitPart, error) {
 		return nil, err
 	}
 	if len(parts) < 2 || len(parts) > maxSplitParts {
-		return nil, splitInvalid("hay %d hijas y deben ser de 2 a %d", len(parts), maxSplitParts)
+		return nil, splitInvalid(loc, "child_count_invalid", len(parts), maxSplitParts)
 	}
 	return parts, nil
 }
@@ -122,7 +125,7 @@ func ParseSplit(brief string) ([]SplitPart, error) {
 func (e *Engine) createChildren(ctx context.Context, id string) ([]string, error) {
 	cr, ok := e.Tracker.(tracker.Creator)
 	if !ok {
-		return nil, &flow.Rejection{Code: "no_creator", Reason: fmt.Sprintf("el tracker %s no permite crear tareas desde bflow; créalas a mano y retira %s con bflow drop", e.Tracker.Name(), id)}
+		return nil, &flow.Rejection{Code: "no_creator", Reason: e.loc().T("engine.split.no_creator", e.Tracker.Name(), id)}
 	}
 	rec, err := e.Store.Load(id)
 	if err != nil {
@@ -130,9 +133,9 @@ func (e *Engine) createChildren(ctx context.Context, id string) ([]string, error
 	}
 	brief, err := e.specSection(rec, "brief")
 	if err != nil {
-		return nil, fmt.Errorf("no se pudo leer el Brief de %s: %w", id, err)
+		return nil, fmt.Errorf("%s: %w", e.loc().T("engine.split.brief_load_failed", id), err)
 	}
-	parts, err := ParseSplit(brief)
+	parts, err := ParseSplit(brief, e.loc())
 	if err != nil {
 		return nil, err
 	}
@@ -148,8 +151,9 @@ func (e *Engine) createChildren(ctx context.Context, id string) ([]string, error
 		}
 		task, err := cr.Create(ctx, p.Title, p.Scope+"\n\nParte de "+id+" · "+rec.Title)
 		if err != nil {
-			return nil, fmt.Errorf("no se pudo crear la hija %q de %s: %w; hijas ya creadas: %s; reintenta con: bflow approve %s --gate split",
-				p.Title, id, err, createdList(ids, order), id)
+			return nil, fmt.Errorf("%s: %w; %s",
+				e.loc().T("engine.split.child_create_failed", p.Title, id), err,
+				e.loc().T("engine.split.child_create_retry_hint", createdList(ids, order, e.loc()), id))
 		}
 		ids[p.Title] = task.ID
 		order = append(order, p.Title)
@@ -157,7 +161,9 @@ func (e *Engine) createChildren(ctx context.Context, id string) ([]string, error
 			r.Split = append(r.Split, store.SplitChild{Title: p.Title, ID: task.ID})
 			return nil
 		}); err != nil {
-			return nil, fmt.Errorf("la hija %q se creó como %s pero no se pudo guardar: %w; hijas ya creadas: %s", p.Title, task.ID, err, createdList(ids, order))
+			return nil, fmt.Errorf("%s: %w; %s",
+				e.loc().T("engine.split.child_save_failed", p.Title, task.ID), err,
+				e.loc().T("engine.split.children_already_created", createdList(ids, order, e.loc())))
 		}
 	}
 	lines := make([]string, 0, len(parts))
@@ -167,9 +173,9 @@ func (e *Engine) createChildren(ctx context.Context, id string) ([]string, error
 	return lines, nil
 }
 
-func createdList(ids map[string]string, order []string) string {
+func createdList(ids map[string]string, order []string, locs ...*i18n.Localizer) string {
 	if len(order) == 0 {
-		return "ninguna"
+		return locOf(locs...).T("engine.split.created_list_none")
 	}
 	out := make([]string, 0, len(order))
 	for _, t := range order {

@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"innobytes.tech/bflow/internal/flow"
+	"innobytes.tech/bflow/internal/i18n"
 	"innobytes.tech/bflow/internal/output"
 	"innobytes.tech/bflow/internal/review"
 	"innobytes.tech/bflow/internal/store"
@@ -26,7 +27,7 @@ const maxDisplayLines = 150
 func (e *Engine) withDisplay(ctx context.Context, rec store.Record, n output.Next) output.Next {
 	if n.Action == output.ActionSpawn {
 		if files := e.pendingAllow(rec); len(files) > 0 {
-			return holdForAllow(rec.Flow.ID, files)
+			return e.holdForAllow(rec.Flow.ID, files)
 		}
 	}
 	if n.Action != output.ActionAsk || len(n.Show) == 0 {
@@ -35,11 +36,11 @@ func (e *Engine) withDisplay(ctx context.Context, rec store.Record, n output.Nex
 	var parts []string
 	if g := rec.Flow.Gate; g != nil && g.Name == flow.GateWalkthrough {
 		if cov, ok := e.lastCoverage(rec.Flow.ID); ok {
-			parts = append(parts, "**Cobertura del reviewer:**\n"+strings.Join(cov.Lines(), "\n"))
+			parts = append(parts, e.loc().T("engine.display.reviewer_coverage_title")+"\n"+strings.Join(cov.Lines(), "\n"))
 		}
 	}
 	if g := rec.Flow.Gate; g != nil && g.Name == flow.GateWalkthrough && rec.Flow.Note != "" {
-		parts = append(parts, "**Tus respuestas a las preguntas de producto:**\n"+rec.Flow.Note)
+		parts = append(parts, e.loc().T("engine.display.product_answers_title")+"\n"+rec.Flow.Note)
 	}
 	for _, c := range n.Show {
 		f := strings.Fields(c) // bflow show <ID> <qué> [--section <s>]
@@ -54,18 +55,22 @@ func (e *Engine) withDisplay(ctx context.Context, rec store.Record, n output.Nex
 		if err != nil {
 			text = "(" + err.Error() + ")"
 		}
-		parts = append(parts, clip(strings.TrimSpace(text), c))
+		parts = append(parts, e.clip(strings.TrimSpace(text), c))
 	}
 	n.Display = strings.Join(parts, "\n\n")
 	return n
 }
 
-func clip(text, cmd string) string {
+func (e *Engine) clip(text, cmd string) string {
+	return clip(text, cmd, e.loc())
+}
+
+func clip(text, cmd string, locs ...*i18n.Localizer) string {
 	lines := strings.Split(text, "\n")
 	if len(lines) <= maxDisplayLines {
 		return text
 	}
-	return strings.Join(lines[:maxDisplayLines], "\n") + fmt.Sprintf("\n… (%d líneas más: %s)", len(lines)-maxDisplayLines, cmd)
+	return strings.Join(lines[:maxDisplayLines], "\n") + "\n" + locOf(locs...).T("engine.display.clip_suffix", len(lines)-maxDisplayLines, cmd)
 }
 
 // productQuestions saca del review-map la sección de preguntas de producto sin
@@ -74,7 +79,7 @@ func (e *Engine) productQuestions(id string) (string, error) {
 	b, err := e.Store.ReadFile(id, artifacts["review-map"])
 	if err != nil {
 		if os.IsNotExist(err) {
-			return "(el review-map todavía no existe)", nil
+			return e.loc().T("engine.display.review_map_not_exist"), nil
 		}
 		return "", err
 	}
@@ -94,8 +99,9 @@ func (e *Engine) productQuestions(id string) (string, error) {
 	for _, l := range strings.Split(strings.ReplaceAll(string(b), "\r\n", "\n"), "\n") {
 		t := strings.TrimSpace(l)
 		if h := strings.IndexFunc(t, func(r rune) bool { return r != '#' }); strings.HasPrefix(t, "#") && h > 0 {
+			low := strings.ToLower(t)
 			switch {
-			case strings.Contains(strings.ToLower(t), "preguntas"):
+			case strings.Contains(low, "preguntas") || strings.Contains(low, "questions"):
 				flush()
 				in, level, scan = true, h, review.OptionScanner{}
 				continue
@@ -107,7 +113,8 @@ func (e *Engine) productQuestions(id string) (string, error) {
 		if !in {
 			continue
 		}
-		if strings.Contains(strings.ToLower(t), "el código responde") {
+		low := strings.ToLower(t)
+		if strings.Contains(low, "el código responde") || strings.Contains(low, "the code answers") {
 			scan.Next(l)
 			continue
 		}
@@ -124,7 +131,7 @@ func (e *Engine) productQuestions(id string) (string, error) {
 	flush()
 	q := strings.TrimSpace(strings.Join(out, "\n"))
 	if q == "" {
-		return "(el review-map no trae preguntas de producto)", nil
+		return e.loc().T("engine.display.review_map_no_questions"), nil
 	}
 	return q, nil
 }
@@ -156,16 +163,15 @@ func (e *Engine) pendingAllow(rec store.Record) []string {
 
 // holdForAllow retiene el spawn: el guard no deja que un agente corra
 // `freeze --allow`, así que lo corre una persona antes de relanzarlo.
-func holdForAllow(id string, files []string) output.Next {
+func (e *Engine) holdForAllow(id string, files []string) output.Next {
 	list := strings.Join(files, " ")
 	return output.Next{
 		Action: output.ActionAsk,
 		Gate:   "freeze_allow",
-		Question: "La decisión pide cambiar una prueba congelada. El guard no deja que un agente corra `bflow freeze --allow`: " +
-			"corre tú en tu terminal `bflow freeze --allow <archivo>` para: " + list + ". Luego se relanza al implementer.",
+		Question: e.loc().T("engine.display.hold_freeze_allow_question", list),
 		Options: []output.Option{
-			{ID: "done", Label: "Ya lo corrí", Command: "bflow status " + id},
-			{ID: "block", Label: "Dejarlo para después", Command: "bflow block " + id + ` --reason "falta bflow freeze --allow ` + files[0] + `"`},
+			{ID: "done", Label: e.loc().T("engine.display.option_already_ran"), Command: "bflow status " + id},
+			{ID: "block", Label: e.loc().T("engine.display.option_leave_for_later"), Command: fmt.Sprintf("bflow block %s --reason %q", id, e.loc().T("engine.display.block_missing_freeze_allow", files[0]))},
 		},
 	}
 }

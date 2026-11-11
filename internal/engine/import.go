@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"innobytes.tech/bflow/internal/flow"
+	"innobytes.tech/bflow/internal/i18n"
 	"innobytes.tech/bflow/internal/store"
 	"innobytes.tech/bflow/internal/tracker"
 )
@@ -70,7 +71,7 @@ func (o *oldID) UnmarshalJSON(b []byte) error {
 	}
 	var n json.Number
 	if err := json.Unmarshal(b, &n); err != nil {
-		return fmt.Errorf("id debe ser texto o número: %s", b)
+		return fmt.Errorf("%s", i18n.DefaultLocalizer().T("engine.import.id_text_or_number", string(b)))
 	}
 	o.s, o.numeric = n.String(), true
 	return nil
@@ -98,7 +99,7 @@ func (e *Engine) Import(ctx context.Context, harnessRoot string, dryRun bool) (I
 	var plan ImportPlan
 	creator, ok := e.Tracker.(tracker.Creator)
 	if !ok {
-		return plan, fmt.Errorf("el tracker %s no permite crear tareas: importa solo el estado con --state-only", e.Tracker.Name())
+		return plan, fmt.Errorf("%s", e.loc().T("engine.import.tracker_no_creator", e.Tracker.Name()))
 	}
 	b, err := os.ReadFile(filepath.Join(harnessRoot, "harness", "feature-list.json"))
 	if err != nil {
@@ -132,7 +133,7 @@ func (e *Engine) Import(ctx context.Context, harnessRoot string, dryRun bool) (I
 			plan.Tasks = append(plan.Tasks, it)
 			continue
 		}
-		task, err := creator.Create(ctx, title, oldDescription(f))
+		task, err := creator.Create(ctx, title, e.oldDescription(f))
 		if err != nil {
 			return plan, err
 		}
@@ -154,20 +155,20 @@ func (e *Engine) Import(ctx context.Context, harnessRoot string, dryRun bool) (I
 	return plan, nil
 }
 
-func oldDescription(f oldFeature) string {
+func (e *Engine) oldDescription(f oldFeature) string {
 	d := strings.TrimSpace(f.Description)
 	acc := f.Acceptances
 	if len(acc) == 0 {
 		acc = f.Acceptance
 	}
 	if len(acc) > 0 {
-		d += "\n\n**Aceptación**\n"
+		d += "\n\n" + e.loc().T("engine.import.acceptance_heading") + "\n"
 		for _, a := range acc {
 			d += "- " + a + "\n"
 		}
 	}
 	if f.ID.s != "" && !f.ID.numeric {
-		d += "\n\nOrigen: " + f.ID.s
+		d += "\n\n" + e.loc().T("engine.import.origin_prefix", f.ID.s)
 	}
 	return strings.TrimSpace(d)
 }
@@ -230,7 +231,7 @@ func (e *Engine) importRecord(id, slug, title, url string, phase flow.Phase, gat
 			s.Gate = &flow.PendingGate{Name: gate}
 		}
 		if phase == flow.Blocked {
-			s.Block = &flow.BlockInfo{Reason: "importada como bloqueada del harness anterior", From: flow.Implementing}
+			s.Block = &flow.BlockInfo{Reason: e.loc().T("engine.import.blocked_harness_reason"), From: flow.Implementing}
 		}
 		r.Flow, r.Title, r.URL = s, title, url
 		r.Branch = e.BranchName(s)

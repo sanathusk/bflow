@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -76,7 +77,7 @@ func (e *Engine) Refreeze(id string) (int, error) {
 	}
 	files := e.Frozen(id)
 	if len(files) == 0 {
-		return 0, errors.New(id + " no tiene pruebas congeladas")
+		return 0, fmt.Errorf("%s", e.loc().T("engine.freeze.no_frozen_tests", id))
 	}
 	if err := e.writeFrozen(id, files); err != nil {
 		return 0, err
@@ -94,7 +95,7 @@ func (e *Engine) AllowFrozen(id, file string) error {
 	file = strings.ReplaceAll(filepath.ToSlash(filepath.Clean(file)), `\`, "/")
 	m := e.readFrozen(id)
 	if _, ok := m[file]; !ok {
-		return errors.New(file + " no es una prueba congelada de " + id + " (bflow status " + id + " --json las lista)")
+		return fmt.Errorf("%s", e.loc().T("engine.freeze.not_frozen_test", file, id, id))
 	}
 	m[file] = allowed
 	if err := e.saveFrozen(id, m); err != nil {
@@ -218,9 +219,9 @@ func (e *Engine) FrozenChanged(id string) []string {
 	return changed
 }
 
-func frozenRejection(changed []string) *flow.Rejection {
-	return &flow.Rejection{Code: "frozen_changed", Reason: "cambiaron pruebas congeladas al aprobar el contrato: " + strings.Join(changed, ", ") +
-		". Déjalas como estaban; si una prueba está mal, reporta NEEDS_DECISION. Si una persona aprueba el cambio, que corra bflow freeze --allow <archivo> desde su terminal."}
+func frozenRejection(changed []string, locs ...*i18n.Localizer) *flow.Rejection {
+	loc := locOf(locs...)
+	return &flow.Rejection{Code: "frozen_changed", Reason: loc.T("engine.freeze.changed_rejection", strings.Join(changed, ", "))}
 }
 
 // testHash normaliza los finales de línea para que un checkout con autocrlf

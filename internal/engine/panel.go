@@ -3,7 +3,6 @@ package engine
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -20,10 +19,10 @@ func (e *Engine) PR(ctx context.Context, id string) (Outcome, error) {
 	out := Outcome{ID: id}
 	rec, err := e.Store.Update(id, func(rec *store.Record, exists bool) error {
 		if !exists {
-			return &flow.Rejection{Code: "not_started", Reason: id + " no ha empezado"}
+			return &flow.Rejection{Code: "not_started", Reason: e.loc().T("engine.panel.not_started", id)}
 		}
 		if rec.Flow.Phase != flow.InReview {
-			return &flow.Rejection{Code: "pr_not_ready", Reason: fmt.Sprintf("el PR se abre al aprobar el walkthrough; %s está en %s", id, rec.Flow.Phase)}
+			return &flow.Rejection{Code: "pr_not_ready", Reason: e.loc().T("engine.panel.pr_not_ready", id, rec.Flow.Phase)}
 		}
 		w, err := e.openPR(ctx, rec)
 		out.Warnings = w
@@ -91,7 +90,7 @@ func (e *Engine) Panel(ctx context.Context, sla bool) (PanelReport, error) {
 			open[t.ID] = t
 		}
 	} else {
-		rep.Warnings = append(rep.Warnings, "tracker no disponible: "+err.Error())
+		rep.Warnings = append(rep.Warnings, e.loc().T("engine.panel.tracker_unavailable", err.Error()))
 	}
 	now := e.now()
 	slaHours := e.Cfg.Flow.SLAHours
@@ -187,7 +186,7 @@ func (e *Engine) reconcile(ctx context.Context, rec store.Record, open map[strin
 	if !ok && listed {
 		got, err := e.Tracker.Get(ctx, id)
 		if err != nil {
-			warns = append(warns, id+": no se pudo consultar el tracker: "+err.Error())
+			warns = append(warns, e.loc().T("engine.panel.tracker_query_failed", id, err.Error()))
 		} else {
 			t, ok = got, true
 		}
@@ -228,7 +227,7 @@ func (e *Engine) reconcile(ctx context.Context, rec store.Record, open map[strin
 	case errors.Is(err, vcs.ErrNoCredentials), errors.Is(err, vcs.ErrNoPR):
 		return nil, warns
 	case err != nil:
-		return nil, append(warns, fmt.Sprintf("%s: no se pudo consultar el PR de %s: %v", id, rec.Flow.Phase, err))
+		return nil, append(warns, e.loc().T("engine.panel.pr_query_failed", id, rec.Flow.Phase, err))
 	case pr.Merged:
 		if co, w := e.closeOutside(ctx, rec, "pr", &pr, ""); co {
 			if w != "" {
@@ -243,7 +242,7 @@ func (e *Engine) reconcile(ctx context.Context, rec store.Record, open map[strin
 		if n > 0 {
 			num = n
 		}
-		warns = append(warns, fmt.Sprintf("%s: el PR #%d se cerró sin merge", id, num))
+		warns = append(warns, e.loc().T("engine.panel.pr_closed_unmerged", id, num))
 	}
 	return nil, warns
 }
@@ -287,10 +286,10 @@ func (e *Engine) closeOutside(ctx context.Context, rec store.Record, reason stri
 		return nil
 	})
 	if err != nil {
-		return false, fmt.Sprintf("%s: no se pudo cerrar desde afuera: %v", id, err)
+		return false, e.loc().T("engine.panel.close_outside_failed", id, err)
 	}
 	if err := e.Store.Append(entry); err != nil {
-		warns = append(warns, "no se pudo escribir log.jsonl: "+err.Error())
+		warns = append(warns, e.loc().T("engine.core.log_append_failed", err.Error()))
 	}
 	if len(warns) > 0 {
 		return true, strings.Join(warns, "; ")
@@ -321,16 +320,16 @@ func (e *Engine) checkMerged(ctx context.Context, rec store.Record) (bool, strin
 		return false, ""
 	}
 	if err != nil {
-		return false, fmt.Sprintf("%s: no se pudo consultar el PR #%d: %v", id, n, err)
+		return false, e.loc().T("engine.panel.pr_status_failed", id, n, err)
 	}
 	switch {
 	case pr.Merged:
 		if _, err := e.Merged(ctx, id); err != nil {
-			return false, fmt.Sprintf("%s: PR mergeado pero no se pudo cerrar: %v", id, err)
+			return false, e.loc().T("engine.panel.merged_close_failed", id, err)
 		}
 		return true, ""
 	case pr.State == "closed":
-		return false, fmt.Sprintf("%s: el PR #%d se cerró sin merge", id, n)
+		return false, e.loc().T("engine.panel.pr_closed_unmerged", id, n)
 	}
 	return false, ""
 }
@@ -339,10 +338,10 @@ func (e *Engine) checkMerged(ctx context.Context, rec store.Record) (bool, strin
 func (e *Engine) remind(ctx context.Context, it PanelItem, since time.Time, rep *PanelReport) []string {
 	var want []string
 	if it.SLA {
-		want = append(want, fmt.Sprintf("⏳ Esperando %s desde %s", it.Gate, since.Format("2006-01-02 15:04")))
+		want = append(want, e.loc().T("engine.panel.sla_waiting", it.Gate, since.Format("2006-01-02 15:04")))
 	}
 	if it.Overdue {
-		want = append(want, fmt.Sprintf("⌛ Vencida (due %s)", it.Due))
+		want = append(want, e.loc().T("engine.panel.overdue", it.Due))
 	}
 	if len(want) == 0 {
 		return nil

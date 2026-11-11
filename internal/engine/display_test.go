@@ -4,6 +4,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"innobytes.tech/bflow/internal/i18n"
 )
 
 func TestProductQuestionsHideAnswers(t *testing.T) {
@@ -47,8 +49,9 @@ func TestProductQuestionsHideAnswers(t *testing.T) {
 }
 
 func TestClipDisplay(t *testing.T) {
+	esLoc := i18n.DefaultBundle().New("es")
 	long := strings.Repeat("línea\n", maxDisplayLines+10)
-	got := clip(strings.TrimSpace(long), "bflow show T-1 review-map")
+	got := clip(strings.TrimSpace(long), "bflow show T-1 review-map", esLoc)
 	if n := strings.Count(got, "\n"); n != maxDisplayLines || !strings.HasSuffix(got, "(10 líneas más: bflow show T-1 review-map)") {
 		t.Errorf("recorte: %d saltos\n%s", n, got[len(got)-60:])
 	}

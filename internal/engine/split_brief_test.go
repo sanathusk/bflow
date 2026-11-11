@@ -3,6 +3,8 @@ package engine
 import (
 	"reflect"
 	"testing"
+
+	"innobytes.tech/bflow/internal/i18n"
 )
 
 // La `### División` no tiene que ser lo último del Brief: un párrafo sin
@@ -26,7 +28,8 @@ func TestCreatedListKeepsOrder(t *testing.T) {
 			t.Fatalf("orden inestable: %s", got)
 		}
 	}
-	if got := createdList(nil, nil); got != "ninguna" {
+	esLoc := i18n.DefaultBundle().New("es")
+	if got := createdList(nil, nil, esLoc); got != "ninguna" {
 		t.Fatalf("got %q", got)
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"unicode"
 
+	"innobytes.tech/bflow/internal/i18n"
 	"innobytes.tech/bflow/internal/store"
 )
 
@@ -33,6 +34,10 @@ var Sections = []Section{
 
 func (e *Engine) ui() bool { return e.Cfg.Flow.UI != nil && *e.Cfg.Flow.UI }
 
+func (e *Engine) sectionHint(key string) string {
+	return e.loc().T("engine.spec.hint_" + strings.ReplaceAll(key, "-", "_"))
+}
+
 func (e *Engine) ensureSpec(rec store.Record) error {
 	path := e.specAbs(rec.Flow)
 	if _, err := os.Stat(path); err == nil {
@@ -51,7 +56,8 @@ func (e *Engine) ensureSpec(rec store.Record) error {
 		if s.UIOnly && !e.ui() {
 			continue
 		}
-		fmt.Fprintf(&b, "\n## %s\n\n<!-- %s -->\n", s.Heading, s.Hint)
+		hint := e.sectionHint(s.Key)
+		fmt.Fprintf(&b, "\n## %s\n\n<!-- %s -->\n", s.Heading, hint)
 	}
 	return store.WriteAtomic(path, []byte(b.String()))
 }
@@ -77,7 +83,7 @@ func (e *Engine) Show(ctx context.Context, id, what, section string) (string, er
 	rec, err := e.Store.Load(id)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			return "", fmt.Errorf("%s no ha empezado", id)
+			return "", fmt.Errorf("%s", e.loc().T("engine.spec.not_started", id))
 		}
 		return "", err
 	}
@@ -97,20 +103,20 @@ func (e *Engine) Show(ctx context.Context, id, what, section string) (string, er
 		}
 		b, err := e.Store.ReadFile(id, "discovery.md")
 		if errors.Is(err, os.ErrNotExist) {
-			return "", fmt.Errorf("%s todavía no tiene discovery (.bflow/tasks/%s/discovery.md)", id, id)
+			return "", fmt.Errorf("%s", e.loc().T("engine.spec.no_discovery", id, id))
 		}
 		return string(b), err
 	}
 	rel, ok := artifacts[what]
 	if !ok {
-		return "", fmt.Errorf("no sé mostrar %q (disponibles: task, brief, spec, contract, review-map, questions, decisions, discovery, check, scout)", what)
+		return "", fmt.Errorf("%s", e.loc().T("engine.spec.unknown_artifact", what))
 	}
 	b, err := e.Store.ReadFile(id, rel)
 	if errors.Is(err, os.ErrNotExist) && what == "scout" {
-		return "(" + id + " no tiene reporte del scout)", nil
+		return e.loc().T("engine.spec.scout_empty_report", id), nil
 	}
 	if errors.Is(err, os.ErrNotExist) {
-		return "", fmt.Errorf("%s todavía no tiene %s (%s/%s)", id, what, ".bflow/tasks/"+id, rel)
+		return "", fmt.Errorf("%s", e.loc().T("engine.spec.no_artifact", id, what, ".bflow/tasks/"+id, rel))
 	}
 	return string(b), err
 }
@@ -121,7 +127,7 @@ func (e *Engine) Show(ctx context.Context, id, what, section string) (string, er
 func (e *Engine) showTask(ctx context.Context, id string) (string, error) {
 	t, err := e.Tracker.Get(ctx, id)
 	if err != nil {
-		return "", trackerErr(id, err)
+		return "", e.trackerErr(id, err)
 	}
 	body := "# " + t.Title
 	if d := strings.TrimSpace(t.Description); d != "" {
@@ -144,13 +150,13 @@ func (e *Engine) specSection(rec store.Record, key string) (string, error) {
 		}
 	}
 	if sec == nil {
-		return "", fmt.Errorf("sección %q no existe (válidas: %s)", key, strings.Join(keys, ", "))
+		return "", fmt.Errorf("%s", e.loc().T("engine.spec.section_not_found", key, strings.Join(keys, ", ")))
 	}
 	b, err := os.ReadFile(e.specAbs(rec.Flow))
 	if err != nil {
 		return "", fmt.Errorf("spec: %w", err)
 	}
-	return cutSection(string(b), sec.Heading)
+	return cutSection(string(b), sec.Heading, e.loc())
 }
 
 // fillSection reemplaza el cuerpo de la sección key del spec (la crea si falta).
@@ -162,7 +168,7 @@ func (e *Engine) fillSection(rec store.Record, key, body string) error {
 		}
 	}
 	if heading == "" {
-		return fmt.Errorf("sección %q no existe", key)
+		return fmt.Errorf("%s", e.loc().T("engine.spec.section_unknown", key))
 	}
 	if err := e.ensureSpec(rec); err != nil {
 		return err
@@ -181,7 +187,7 @@ func (e *Engine) fillSection(rec store.Record, key, body string) error {
 		}
 	}
 	if start < 0 {
-		return fmt.Errorf("el spec no tiene la sección «## %s»", heading)
+		return fmt.Errorf("%s", e.loc().T("engine.spec.missing_heading", heading))
 	}
 	end := len(lines)
 	for i := start; i < len(lines); i++ {
@@ -202,7 +208,7 @@ func (e *Engine) fillSection(rec store.Record, key, body string) error {
 var commentRe = regexp.MustCompile(`(?s)<!--.*?-->`)
 
 // cutSection devuelve el cuerpo bajo "## heading" hasta el siguiente "## ".
-func cutSection(doc, heading string) (string, error) {
+func cutSection(doc, heading string, locs ...*i18n.Localizer) (string, error) {
 	lines := strings.Split(strings.ReplaceAll(doc, "\r\n", "\n"), "\n")
 	start := -1
 	for i, l := range lines {
@@ -212,7 +218,7 @@ func cutSection(doc, heading string) (string, error) {
 		}
 	}
 	if start < 0 {
-		return "", fmt.Errorf("el spec no tiene la sección «## %s»", heading)
+		return "", fmt.Errorf("%s", locOf(locs...).T("engine.spec.missing_heading", heading))
 	}
 	end := len(lines)
 	for i := start; i < len(lines); i++ {

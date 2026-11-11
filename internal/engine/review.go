@@ -3,15 +3,25 @@ package engine
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"strings"
 	"time"
 
 	"innobytes.tech/bflow/internal/flow"
 	"innobytes.tech/bflow/internal/guard"
+	"innobytes.tech/bflow/internal/i18n"
 	"innobytes.tech/bflow/internal/review"
 	"innobytes.tech/bflow/internal/store"
 )
+
+// locOf devuelve el primer localizador no nil de locs, o el por defecto.
+func locOf(locs ...*i18n.Localizer) *i18n.Localizer {
+	for _, l := range locs {
+		if l != nil {
+			return l
+		}
+	}
+	return i18n.DefaultLocalizer()
+}
 
 // docsReport es el reporte del documenter con las rutas de ## Docs sin cambio.
 const docsReport = "reports/docs.md"
@@ -97,14 +107,14 @@ func isReviewer(agent string) bool {
 
 // reviewIncomplete arma el rechazo de APPROVED cuando falta cobertura o formato
 // en el review-map (R7, R8); nil si no falta nada.
-func reviewIncomplete(cov review.Coverage, m review.Map, hasMap bool, base string) *flow.Rejection {
+func reviewIncomplete(cov review.Coverage, m review.Map, hasMap bool, base string, locs ...*i18n.Localizer) *flow.Rejection {
 	if !hasMap {
 		return nil
 	}
+	loc := locOf(locs...)
 	var blocks []string
 	if cov.Measured && len(cov.RedMissing) > 0 {
-		blocks = append(blocks, "El review-map marca como 🔴 archivos del diff que no abriste:\n- "+strings.Join(cov.RedMissing, "\n- ")+
-			"\nÁbrelos (Read o `git diff -- <ruta>`) antes de aprobar.")
+		blocks = append(blocks, loc.T("engine.review.red_unread", strings.Join(cov.RedMissing, "\n- ")))
 	}
 	if cov.Measured && len(cov.Pending) > 0 {
 		if base == "" {
@@ -114,33 +124,34 @@ func reviewIncomplete(cov review.Coverage, m review.Map, hasMap bool, base strin
 		if len(shown) > 20 {
 			shown, more = shown[:20], len(shown)-20
 		}
-		b := "Archivos del diff (código y pruebas) que no abriste:\n- " + strings.Join(shown, "\n- ")
+		b := loc.T("engine.review.pending_head", strings.Join(shown, "\n- "))
 		if more > 0 {
-			b += fmt.Sprintf("\n- y %d más", more)
+			b += loc.T("engine.review.pending_more", more)
 		}
-		b += "\nÁbrelos con Read o `git diff " + base + "...HEAD -- <ruta>`"
+		b += loc.T("engine.review.pending_open", base)
 		if cov.DiffLines < review.WholeDiffMax {
-			b += "; con menos de 1,500 líneas basta un `git diff " + base + "...HEAD` completo"
+			b += loc.T("engine.review.pending_whole", base)
 		}
-		blocks = append(blocks, b+".")
+		b += "."
+		blocks = append(blocks, b)
 	}
 	if len(m.RedNoPath) > 0 {
-		blocks = append(blocks, "Estas viñetas 🔴 no empiezan con la ruta del archivo en backticks (`ruta`: razón):\n- "+strings.Join(m.RedNoPath, "\n- "))
+		blocks = append(blocks, loc.T("engine.review.red_no_path", strings.Join(m.RedNoPath, "\n- ")))
 	}
 	if len(m.RedNoExits) > 0 {
-		blocks = append(blocks, "Estas viñetas 🔴 no dicen qué caminos de salida revisaste (falta `caminos:` o está vacío/de relleno como `ninguno`); agrega debajo `- caminos: <archivo:línea y estado que deja>` o `- caminos: sin ramas nuevas`:\n- "+strings.Join(m.RedNoExits, "\n- "))
+		blocks = append(blocks, loc.T("engine.review.red_no_exits", strings.Join(m.RedNoExits, "\n- ")))
 	}
 	if len(m.QuestionTells) > 0 {
-		blocks = append(blocks, "Estas opciones de `## Preguntas de producto` delatan cuál hace el código; reescríbelas neutras, sin marcas ni menciones al código:\n- "+strings.Join(m.QuestionTells, "\n- "))
+		blocks = append(blocks, loc.T("engine.review.question_tells", strings.Join(m.QuestionTells, "\n- ")))
 	}
 	if !m.HasDocs {
-		blocks = append(blocks, "El review-map no tiene la sección `## Docs`: lista ahí, una por viñeta con la ruta en backticks, la documentación que este cambio debe tocar.")
+		blocks = append(blocks, loc.T("engine.review.docs_missing"))
 	}
 	if len(blocks) == 0 {
 		return nil
 	}
 	return &flow.Rejection{Code: "review_incomplete",
-		Reason: "la revisión está incompleta:\n" + strings.Join(blocks, "\n") + "\nCorrígelo y reporta APPROVED otra vez."}
+		Reason: loc.T("engine.review.incomplete", strings.Join(blocks, "\n"))}
 }
 
 // docsPending arma el rechazo del documenter cuando una ruta de ## Docs ni
@@ -166,8 +177,8 @@ func (e *Engine) docsPending(ctx context.Context, id string) *flow.Rejection {
 	if len(pending) == 0 {
 		return nil
 	}
-	return &flow.Rejection{Code: "docs_pending", Reason: "el review-map lista en `## Docs` rutas que no cambiaron en la rama ni constan en " + docsReport + ":\n- " +
-		strings.Join(pending, "\n- ") + "\nActualízalas, o agrega a " + docsReport + " una línea por cada una: - `ruta`: sin cambio: <motivo>. Después reporta DONE otra vez."}
+	loc := locOf(e.Loc)
+	return &flow.Rejection{Code: "docs_pending", Reason: loc.T("engine.review.docs_pending", docsReport, strings.Join(pending, "\n- "), docsReport)}
 }
 
 // coverageEntry es el evento review_coverage de una corrida del reviewer (R12).
@@ -227,9 +238,8 @@ func (e *Engine) changelogRequired(ctx context.Context, rec *store.Record) *flow
 	if e.changelogExempt(rec.Flow.ID) {
 		return nil
 	}
-	return &flow.Rejection{Code: "changelog_required", Reason: "el diff toca salida pública (flow.public_paths) y el changelog para consumidores no cambió:\n- " +
-		strings.Join(touched, "\n- ") + "\nEscribe " + cl + " con lo que cambia para quien usa el producto y reporta DONE otra vez. " +
-		"Si no hace falta, reporta BLOCKED con el motivo; una persona puede eximirlo con `bflow unblock " + rec.Flow.ID + " --no-changelog --note \"<motivo>\"`."}
+	loc := locOf(e.Loc)
+	return &flow.Rejection{Code: "changelog_required", Reason: loc.T("engine.review.changelog_required", strings.Join(touched, "\n- "), cl, rec.Flow.ID)}
 }
 
 // changelogExempt: hay un unblock --no-changelog posterior a la última entrada
@@ -274,7 +284,8 @@ func (e *Engine) NarrativeComments(ctx context.Context, id string) []string {
 }
 
 // narrativeRejection es el rechazo de DONE con hasta 20 hallazgos.
-func narrativeRejection(found []string) *flow.Rejection {
+func narrativeRejection(found []string, locs ...*i18n.Localizer) *flow.Rejection {
+	loc := locOf(locs...)
 	const max = 20
 	shown := found
 	if len(shown) > max {
@@ -282,9 +293,7 @@ func narrativeRejection(found []string) *flow.Rejection {
 	}
 	list := strings.Join(shown, "\n")
 	if n := len(found) - len(shown); n > 0 {
-		list += fmt.Sprintf("\ny %d más", n)
+		list += loc.T("engine.review.narrative_more", n)
 	}
-	return &flow.Rejection{Code: "narrative_comment", Reason: "hay comentarios agregados que narran la tarea:\n" + list +
-		"\nUn comentario explica el por qué que el código no deja ver; lo de la tarea, la spec o lo validado va en reports/impl.md. " +
-		"Quítalo o reescríbelo, commitea y reporta DONE otra vez. Si el patrón no aplica a este repo, ajusta flow.comment_patterns o apaga flow.narrative_comments."}
+	return &flow.Rejection{Code: "narrative_comment", Reason: loc.T("engine.review.narrative_rejected", list)}
 }

@@ -2,7 +2,6 @@ package engine
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"innobytes.tech/bflow/internal/flow"
@@ -18,8 +17,8 @@ func (e *Engine) reproMissing(ctx context.Context, rec store.Record) *flow.Rejec
 	if step == "" {
 		step = "test"
 	}
-	miss := func(format string, a ...any) *flow.Rejection {
-		return &flow.Rejection{Code: "repro_test_missing", Reason: fmt.Sprintf(format, a...)}
+	miss := func(key string, a ...any) *flow.Rejection {
+		return &flow.Rejection{Code: "repro_test_missing", Reason: e.loc().T("engine.repro."+key, a...)}
 	}
 	known := false
 	for _, st := range e.Cfg.Check.Steps {
@@ -28,22 +27,22 @@ func (e *Engine) reproMissing(ctx context.Context, rec store.Record) *flow.Rejec
 		}
 	}
 	if !known {
-		return miss("check.test_step es %q y no es ningún paso de check.steps: corrígelo en bflow.yaml para que el DONE pueda verificar la prueba de reproducción.", step)
+		return miss("unknown_test_step", step)
 	}
 	base := e.diffBase()
 	if base == "" {
 		base = rec.StartSHA
 	}
 	if base == "" {
-		return miss("no se puede saber qué commits son de la tarea: configura vcs.base_branch en bflow.yaml.")
+		return miss("missing_base_branch")
 	}
 	commits, err := e.Git.Commits(ctx, base)
 	if err != nil {
-		return miss("no se pudieron listar los commits de la tarea: %v", err)
+		return miss("list_commits_failed", err)
 	}
 	head, err := e.Git.HeadSHA(ctx)
 	if err != nil {
-		return miss("no se pudo leer HEAD: %v", err)
+		return miss("read_head_failed", err)
 	}
 	var cands []string
 	for _, sha := range commits {
@@ -52,7 +51,7 @@ func (e *Engine) reproMissing(ctx context.Context, rec store.Record) *flow.Rejec
 		}
 		files, err := e.Git.CommitKept(ctx, sha)
 		if err != nil {
-			return miss("no se pudieron leer los archivos del commit %s: %v", short(sha), err)
+			return miss("read_commit_files_failed", short(sha), err)
 		}
 		if len(files) == 0 {
 			continue
@@ -69,13 +68,13 @@ func (e *Engine) reproMissing(ctx context.Context, rec store.Record) *flow.Rejec
 		}
 	}
 	if len(cands) == 0 {
-		return miss("en un hotfix, antes de la corrección hace falta un commit con solo la prueba que reproduce el defecto, y no hay commit de solo pruebas en el rango de la tarea. Haz commit de la prueba sin tocar código, corre `bflow check %s` (debe fallar en %s), y luego la corrección. Si no se puede probar (docs, config, carreras), reporta DONE con --no-repro \"<motivo>\".", id, step)
+		return miss("no_test_only_commit", id, step)
 	}
 	var unchecked []string
 	for _, sha := range cands {
 		found, status, err := e.Checks.StepAt(ctx, id, sha, step)
 		if err != nil {
-			return miss("no se pudo leer el check del commit %s: %v", short(sha), err)
+			return miss("read_check_failed", short(sha), err)
 		}
 		if !found {
 			unchecked = append(unchecked, short(sha))
@@ -86,12 +85,12 @@ func (e *Engine) reproMissing(ctx context.Context, rec store.Record) *flow.Rejec
 		}
 	}
 	if len(unchecked) == len(cands) {
-		return miss("hay commit(s) de solo pruebas (%s) pero ninguno tiene check guardado. Corre `git switch --detach <sha> && bflow check %s && git switch -` en cada uno hasta ver el fallo del paso %s.", strings.Join(unchecked, ", "), id, step)
+		return miss("all_unchecked", strings.Join(unchecked, ", "), id, step)
 	}
 	if len(unchecked) > 0 {
-		return miss("el paso %s no falló en los commits de solo pruebas con check, y %s no tienen check guardado. Corre `git switch --detach <sha> && bflow check %s && git switch -` en cada uno hasta ver el fallo del paso %s.", step, strings.Join(unchecked, ", "), id, step)
+		return miss("partial_unchecked", step, strings.Join(unchecked, ", "), id, step)
 	}
-	return miss("hay commit(s) de solo pruebas pero el paso %s no falló en ninguno: la prueba no reproduce el defecto. Corrígela, haz commit y corre `bflow check %s`.", step, id)
+	return miss("step_never_failed", step, id)
 }
 
 func short(sha string) string {
