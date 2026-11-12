@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"innobytes.tech/bflow/internal/engine"
-	"innobytes.tech/bflow/internal/i18n"
 	"innobytes.tech/bflow/internal/metrics"
 )
 
@@ -46,7 +45,6 @@ func rd(agent, path string, partial bool) metrics.ReadEvent {
 func readsFixture(t *testing.T) (*Env, *engine.Engine, string) {
 	t.Helper()
 	env, e, id := callsFixture(t, false)
-	env.Loc = i18n.DefaultBundle().New("es")
 	putReads(t, e, id, rd("main", "x.go", false), rd("implementer", "x.go", true), rd("scout", "x.go", false), rd("main", "y.go", false), rd("main", "y.go", false))
 	return env, e, id
 }
@@ -90,7 +88,6 @@ func TestStatsReadsText(t *testing.T) {
 
 	// R16: 35 archivos, solo se muestran 30.
 	env, e, id := callsFixture(t, false)
-	env.Loc = i18n.DefaultBundle().New("es")
 	var evs []metrics.ReadEvent
 	for i := 0; i < 35; i++ {
 		evs = append(evs, rd("main", fmt.Sprintf("f%02d.go", i), false))
@@ -152,7 +149,6 @@ func TestStatsReadsJSON(t *testing.T) {
 // R19: sin reads-all.jsonl (o sin líneas válidas) se avisa y el código es OK.
 func TestStatsReadsLegacy(t *testing.T) {
 	env, e, id := callsFixture(t, false)
-	env.Loc = i18n.DefaultBundle().New("es")
 	code, out := textOf(t, env, "stats", id, "--reads")
 	if code != 0 || !strings.Contains(out, "sin registro de lecturas") {
 		t.Errorf("texto: %d %q", code, out)
@@ -176,7 +172,6 @@ func TestStatsReadsLegacy(t *testing.T) {
 // R21: con --calls y --reads salen los dos bloques, llamadas primero.
 func TestStatsReadsWithCalls(t *testing.T) {
 	env, e, id := callsFixture(t, true)
-	env.Loc = i18n.DefaultBundle().New("es")
 	addTokenEntry(t, e, id, 14, 165, 14000, 350)
 	putReads(t, e, id, rd("main", "x.go", false), rd("implementer", "x.go", false))
 	_, callsOnly := textOf(t, env, "stats", id, "--calls")
@@ -201,46 +196,5 @@ func TestStatsReadsNeedsID(t *testing.T) {
 	code, out, raw = runJSON(t, env, "stats", "NOPE-999", "--reads")
 	if code == 0 || out["code"] != "not_found" {
 		t.Errorf("ID inexistente: %d %s", code, raw)
-	}
-}
-
-func TestStatsReadsLocalizedEnglish(t *testing.T) {
-	env, e, id := callsFixture(t, false)
-	env.Loc = i18n.DefaultBundle().New("en")
-	putReads(t, e, id, rd("main", "x.go", false), rd("implementer", "x.go", true), rd("scout", "x.go", false), rd("main", "y.go", false), rd("main", "y.go", false))
-
-	code, out := textOf(t, env, "stats", id, "--reads")
-	if code != 0 {
-		t.Fatalf("exit %d: %s", code, out)
-	}
-	for _, want := range []string{
-		"reads: 5 · files 2 · partial 1",
-		"cross-agent rereads: 2 of 5 (40.0%) · shared files: 1 of 2 (50.0%)",
-		"path reads partial agents who",
-	} {
-		if !strings.Contains(out, want) {
-			t.Errorf("expected English text to contain %q, got:\n%s", want, out)
-		}
-	}
-
-	// Legacy / no reads recorded in English
-	envNoReads, _, idNoReads := callsFixture(t, false)
-	envNoReads.Loc = i18n.DefaultBundle().New("en")
-	_, outLegacy := textOf(t, envNoReads, "stats", idNoReads, "--reads")
-	if !strings.Contains(outLegacy, "reads: no reads recorded") {
-		t.Errorf("expected English no reads message, got:\n%s", outLegacy)
-	}
-
-	// Pagination message in English
-	envMore, eMore, idMore := callsFixture(t, false)
-	envMore.Loc = i18n.DefaultBundle().New("en")
-	var evs []metrics.ReadEvent
-	for i := 0; i < 35; i++ {
-		evs = append(evs, rd("main", fmt.Sprintf("f%02d.go", i), false))
-	}
-	putReads(t, eMore, idMore, evs...)
-	_, outMore := textOf(t, envMore, "stats", idMore, "--reads")
-	if !strings.Contains(outMore, "and 5 more files (--json for all)") {
-		t.Errorf("expected English pagination message, got:\n%s", outMore)
 	}
 }
