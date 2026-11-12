@@ -58,15 +58,35 @@ func TestInitLanguage(t *testing.T) {
 	})
 
 	t.Run("--lang invalid fails", func(t *testing.T) {
+		out := &bytes.Buffer{}
 		env := &Env{
-			Stdout: &bytes.Buffer{},
+			Stdout: out,
 			Stderr: &bytes.Buffer{},
 			Stdin:  strings.NewReader(""),
 			Dir:    testutil.TempDir(t),
+			Loc:    i18n.DefaultBundle().New("en"),
 		}
 		t.Setenv("BFLOW_CONFIG_HOME", testutil.TempDir(t))
 		if code := Run([]string{"init", "--yes", "--lang", "fr"}, env); code == 0 {
 			t.Fatalf("expected error for unsupported language 'fr', got exit 0")
+		}
+		if !strings.Contains(out.String(), `unsupported language "fr" (available: en, es)`) {
+			t.Errorf("expected localized English error, got: %s", out.String())
+		}
+
+		outEs := &bytes.Buffer{}
+		envEs := &Env{
+			Stdout: outEs,
+			Stderr: &bytes.Buffer{},
+			Stdin:  strings.NewReader(""),
+			Dir:    testutil.TempDir(t),
+			Loc:    i18n.DefaultBundle().New("es"),
+		}
+		if code := Run([]string{"init", "--yes", "--lang", "fr"}, envEs); code == 0 {
+			t.Fatalf("expected error for unsupported language 'fr', got exit 0")
+		}
+		if !strings.Contains(outEs.String(), `idioma "fr" no soportado (disponibles: en, es)`) {
+			t.Errorf("expected localized Spanish error, got: %s", outEs.String())
 		}
 	})
 

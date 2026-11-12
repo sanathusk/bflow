@@ -166,8 +166,8 @@ func (e *Engine) pendingAllow(rec store.Record) []string {
 func (e *Engine) holdForAllow(id string, files []string) output.Next {
 	list := strings.Join(files, " ")
 	return output.Next{
-		Action: output.ActionAsk,
-		Gate:   "freeze_allow",
+		Action:   output.ActionAsk,
+		Gate:     "freeze_allow",
 		Question: e.loc().T("engine.display.hold_freeze_allow_question", list),
 		Options: []output.Option{
 			{ID: "done", Label: e.loc().T("engine.display.option_already_ran"), Command: "bflow status " + id},

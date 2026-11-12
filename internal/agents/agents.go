@@ -400,11 +400,7 @@ func Models(fc flow.Config, conf map[string]config.AgentConf) map[string]string 
 // EvalReviewerSpec arma el agente del eval del reviewer (bflow-eval-reviewer):
 // mismo modelo y esfuerzo que agents.reviewer, contrato propio y sin oficio
 // embebido, porque lo lee del archivo craft que recibe en cada corrida.
-func EvalReviewerSpec(conf config.AgentConf, locs ...*i18n.Localizer) Spec {
-	var loc *i18n.Localizer
-	if len(locs) > 0 {
-		loc = locs[0]
-	}
+func EvalReviewerSpec(conf config.AgentConf, loc *i18n.Localizer) Spec {
 	if loc == nil {
 		loc = i18n.DefaultLocalizer()
 	}

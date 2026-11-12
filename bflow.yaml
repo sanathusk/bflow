@@ -35,4 +35,4 @@ flow:
 guard:
   forbid_coauthor: true # en este repo los commits van sin coautor
 ui:
-  lang: en
+  lang: es

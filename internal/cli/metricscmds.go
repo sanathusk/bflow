@@ -81,7 +81,7 @@ func runStats(c *Ctx) output.Envelope {
 		if wantReads {
 			rs := readReadEvents(e, id)
 			data["reads"] = rs
-			text += "\n" + renderReads(rs)
+			text += "\n" + renderReads(rs, envLoc(c.Env))
 		}
 		env := output.OK("stats", data, nil)
 		env.Text = text

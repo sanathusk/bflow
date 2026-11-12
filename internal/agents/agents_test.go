@@ -368,7 +368,7 @@ func TestModelsRespectsRepoOverride(t *testing.T) {
 // El agente del eval usa modelo y esfuerzo de agents.reviewer y su
 // contrato; el oficio no va embebido porque lo lee del craft del ref.
 func TestEvalReviewerSpec(t *testing.T) {
-	s := EvalReviewerSpec(config.AgentConf{Model: "sonnet", Effort: "high"})
+	s := EvalReviewerSpec(config.AgentConf{Model: "sonnet", Effort: "high"}, nil)
 	if s.Name != "eval-reviewer" || s.Subagent != "bflow-eval-reviewer" {
 		t.Errorf("nombres: %q %q", s.Name, s.Subagent)
 	}
@@ -403,7 +403,7 @@ func TestEvalReviewerSpec(t *testing.T) {
 		t.Error("sin oficio embebido")
 	}
 
-	def := EvalReviewerSpec(config.AgentConf{})
+	def := EvalReviewerSpec(config.AgentConf{}, nil)
 	if def.Model != "opus" || def.Effort != "medium" {
 		t.Errorf("sin ajustes toma el catálogo del reviewer: %q %q", def.Model, def.Effort)
 	}

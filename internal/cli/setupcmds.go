@@ -185,7 +185,8 @@ func runInit(c *Ctx) output.Envelope {
 	// Idioma / Language
 	langFlag := str(c.Flags, "lang")
 	if langFlag != "" && !slices.Contains(i18n.Supported, langFlag) {
-		return output.Fail("usage", fmt.Errorf("idioma/lang %q no existe (disponibles: %s)", langFlag, strings.Join(i18n.Supported, ", ")))
+		loc := envLoc(c.Env)
+		return output.Fail("usage", fmt.Errorf("%s", loc.T("init.unsupported_lang", langFlag, strings.Join(i18n.Supported, ", "))))
 	}
 	if langFlag == "" {
 		if !p.yes {

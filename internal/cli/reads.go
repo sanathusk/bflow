@@ -6,6 +6,7 @@ import (
 	"unicode/utf8"
 
 	"innobytes.tech/bflow/internal/engine"
+	"innobytes.tech/bflow/internal/i18n"
 	"innobytes.tech/bflow/internal/metrics"
 )
 
@@ -22,15 +23,23 @@ func readReadEvents(e *engine.Engine, id string) metrics.ReadsSummary {
 }
 
 // renderReads es el bloque de texto de stats --reads (R13, R16).
-func renderReads(s metrics.ReadsSummary) string {
+func renderReads(s metrics.ReadsSummary, loc *i18n.Localizer) string {
+	if loc == nil {
+		loc = i18n.DefaultLocalizer()
+	}
 	if !s.Available {
-		return "  lecturas: sin registro de lecturas"
+		return loc.T("reads.none")
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "  lecturas: %d · archivos %d · parciales %d\n", s.Reads, s.Files, s.Partial)
-	fmt.Fprintf(&b, "  relectura entre agentes: %d de %d (%.1f%%) · archivos compartidos: %d de %d (%.1f%%)\n",
-		s.CrossRereads, s.Reads, s.CrossPct, s.SharedFiles, s.Files, s.SharedPct)
-	rows := [][]string{{"ruta", "lecturas", "parciales", "agentes", "quiénes"}}
+	fmt.Fprintf(&b, "%s", loc.T("reads.summary", s.Reads, s.Files, s.Partial))
+	fmt.Fprintf(&b, "%s", loc.T("reads.cross_rereads", s.CrossRereads, s.Reads, s.CrossPct, s.SharedFiles, s.Files, s.SharedPct))
+	rows := [][]string{{
+		loc.T("reads.col_path"),
+		loc.T("reads.col_reads"),
+		loc.T("reads.col_partial"),
+		loc.T("reads.col_agents"),
+		loc.T("reads.col_who"),
+	}}
 	for i, r := range s.Rows {
 		if i == maxReadRows {
 			break
@@ -56,7 +65,7 @@ func renderReads(s metrics.ReadsSummary) string {
 		b.WriteString("\n")
 	}
 	if more := len(s.Rows) - maxReadRows; more > 0 {
-		fmt.Fprintf(&b, "  y %d archivos más (--json para todos)\n", more)
+		fmt.Fprintf(&b, "%s", loc.T("reads.more_files", more))
 	}
 	return strings.TrimRight(b.String(), " \n")
 }

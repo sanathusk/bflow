@@ -522,5 +522,15 @@
   "cli.panel_due": " · due %s",
   "cli.panel_more": "… and %d more",
   "cli.panel_reminded": "  ↳ commented: %s",
-  "cli.panel_warning": "  ⚠ %s"
+  "cli.panel_warning": "  ⚠ %s",
+  "reads.none": "  reads: no reads recorded",
+  "reads.summary": "  reads: %d · files %d · partial %d\n",
+  "reads.cross_rereads": "  cross-agent rereads: %d of %d (%.1f%%) · shared files: %d of %d (%.1f%%)\n",
+  "reads.col_path": "path",
+  "reads.col_reads": "reads",
+  "reads.col_partial": "partial",
+  "reads.col_agents": "agents",
+  "reads.col_who": "who",
+  "reads.more_files": "  and %d more files (--json for all)\n",
+  "init.unsupported_lang": "unsupported language %q (available: %s)"
 }
